@@ -4,9 +4,10 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
 import '../data/local_video_scanner.dart';
 import '../data/video_provider.dart';
+import '../models/video_item.dart';
 
 /// App 内置内容管理页面
-/// 可在展会设备上直接编辑 config.json（分类模块 + 视频元信息）
+/// 可在展会设备上直接编辑 config.json（分类模块含子分类 + 视频元信息）
 class ConfigEditorPage extends StatefulWidget {
   const ConfigEditorPage({super.key});
 
@@ -18,16 +19,20 @@ class _ConfigEditorPageState extends State<ConfigEditorPage>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
 
-  List<_CatItem> _categories = [];
-  Map<String, Map<String, dynamic>> _videoMap = {}; // filename -> config
+  // 使用 VideoCategory 模型，支持 children
+  List<VideoCategory> _categories = [];
+  Map<String, Map<String, dynamic>> _videoMap = {};
 
   bool _isLoading = true;
   bool _hasChanges = false;
+
+  static const _green = Color(0xFF2BB80F);
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
+    _tabController.addListener(() => setState(() {}));
     _load();
   }
 
@@ -36,8 +41,6 @@ class _ConfigEditorPageState extends State<ConfigEditorPage>
     _tabController.dispose();
     super.dispose();
   }
-
-  // ── 数据加载 / 保存 ─────────────────────────────
 
   Future<void> _load() async {
     setState(() => _isLoading = true);
@@ -58,13 +61,8 @@ class _ConfigEditorPageState extends State<ConfigEditorPage>
     _categories = [];
     if (json['categories'] is List) {
       for (final c in json['categories'] as List) {
-        final m = c as Map<String, dynamic>;
-        _categories.add(_CatItem(
-          id: m['id'] as String? ?? '',
-          nameZh: m['name_zh'] as String? ?? '',
-          nameEn: m['name_en'] as String? ?? '',
-          sortOrder: m['sort_order'] as int? ?? 0,
-        ));
+        _categories.add(
+            VideoCategory.fromConfig(c as Map<String, dynamic>));
       }
     }
     _videoMap = {};
@@ -79,32 +77,47 @@ class _ConfigEditorPageState extends State<ConfigEditorPage>
 
   void _loadDefaults() {
     _categories = [
-      _CatItem(id: 'cat_product', nameZh: '产品', nameEn: 'Products', sortOrder: 1),
-      _CatItem(id: 'cat_scene', nameZh: '场景', nameEn: 'Scenes', sortOrder: 2),
-      _CatItem(id: 'cat_case', nameZh: '案例', nameEn: 'Cases', sortOrder: 3),
+      VideoCategory(
+          id: 'cat_product',
+          nameZh: '产品',
+          nameEn: 'Products',
+          type: 'custom',
+          sortOrder: 1),
+      VideoCategory(
+          id: 'cat_scene',
+          nameZh: '场景',
+          nameEn: 'Scenes',
+          type: 'custom',
+          sortOrder: 2),
+      VideoCategory(
+          id: 'cat_case',
+          nameZh: '案例',
+          nameEn: 'Cases',
+          type: 'custom',
+          sortOrder: 3),
     ];
     _videoMap = {};
   }
 
+  // ── 保存 ─────────────────────────────────────
+
   Future<void> _save() async {
     // 重排 sort_order
+    final cats = <VideoCategory>[];
     for (int i = 0; i < _categories.length; i++) {
-      _categories[i] = _CatItem(
-        id: _categories[i].id,
-        nameZh: _categories[i].nameZh,
-        nameEn: _categories[i].nameEn,
+      final c = _categories[i];
+      cats.add(VideoCategory(
+        id: c.id,
+        nameZh: c.nameZh,
+        nameEn: c.nameEn,
+        type: c.type,
         sortOrder: i + 1,
-      );
+        children: c.children,
+      ));
     }
+
     final json = {
-      'categories': _categories
-          .map((c) => {
-                'id': c.id,
-                'name_zh': c.nameZh,
-                'name_en': c.nameEn,
-                'sort_order': c.sortOrder,
-              })
-          .toList(),
+      'categories': cats.map((c) => c.toConfig()).toList(),
       'videos': _videoMap.values.toList(),
     };
     final ok = await LocalVideoScanner.saveConfigText(
@@ -114,12 +127,11 @@ class _ConfigEditorPageState extends State<ConfigEditorPage>
       setState(() => _hasChanges = false);
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
         content: Text('✅ 保存成功，数据已重新加载'),
-        backgroundColor: Color(0xFF1A73E8),
+        backgroundColor: _green,
         behavior: SnackBarBehavior.floating,
       ));
       context.read<VideoProvider>().switchToLocal();
     } else {
-      // 保存失败：引导用户去系统设置开启权限
       _showPermissionDialog();
     }
   }
@@ -150,35 +162,34 @@ class _ConfigEditorPageState extends State<ConfigEditorPage>
             child: const Text('取消'),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF1A73E8)),
+            style: ElevatedButton.styleFrom(backgroundColor: _green),
             onPressed: () {
               Navigator.pop(ctx);
-              openAppSettings(); // 跳转系统设置
+              openAppSettings();
             },
-            child: const Text('去设置',
-                style: TextStyle(color: Colors.white)),
+            child: const Text('去设置', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
     );
   }
 
-  // ── 主体 UI ──────────────────────────────────
+  // ── Scaffold ─────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF0F2F5),
       appBar: AppBar(
-        backgroundColor: const Color(0xFF1A73E8),
+        backgroundColor: _green,
         foregroundColor: Colors.white,
         title: const Text('内容管理', style: TextStyle(fontSize: 17)),
         actions: [
           if (_hasChanges)
             TextButton.icon(
               onPressed: _save,
-              icon: const Icon(Icons.save_rounded, color: Colors.white, size: 18),
+              icon:
+                  const Icon(Icons.save_rounded, color: Colors.white, size: 18),
               label: const Text('保存', style: TextStyle(color: Colors.white)),
             ),
         ],
@@ -188,30 +199,34 @@ class _ConfigEditorPageState extends State<ConfigEditorPage>
           labelColor: Colors.white,
           unselectedLabelColor: Colors.white60,
           tabs: const [
-            Tab(icon: Icon(Icons.category_outlined, size: 18), text: '分类模块'),
-            Tab(icon: Icon(Icons.video_library_outlined, size: 18), text: '视频配置'),
+            Tab(
+                icon: Icon(Icons.category_outlined, size: 18),
+                text: '分类模块'),
+            Tab(
+                icon: Icon(Icons.video_library_outlined, size: 18),
+                text: '视频配置'),
           ],
         ),
       ),
       body: _isLoading
-          ? const Center(
-              child: CircularProgressIndicator(color: Color(0xFF1A73E8)))
+          ? const Center(child: CircularProgressIndicator(color: _green))
           : TabBarView(
               controller: _tabController,
               children: [_buildCatTab(), _buildVideoTab()],
             ),
       floatingActionButton: FloatingActionButton.extended(
-        backgroundColor: const Color(0xFF1A73E8),
+        backgroundColor: _green,
         foregroundColor: Colors.white,
         onPressed: () {
           if (_tabController.index == 0) {
-            _showEditCatDialog();
+            _showEditCatDialog(parentCat: null);
           } else {
             _showEditVideoDialog(null);
           }
         },
         icon: const Icon(Icons.add),
-        label: Text(_tabController.index == 0 ? '添加模块' : '添加视频'),
+        label:
+            Text(_tabController.index == 0 ? '添加顶级模块' : '添加视频'),
       ),
     );
   }
@@ -222,11 +237,10 @@ class _ConfigEditorPageState extends State<ConfigEditorPage>
     return Column(
       children: [
         _banner(
-          '自定义展示模块，例如「产品」「场景」「案例」。\n拖动可调整顺序，分类 ID 建议使用英文。',
-        ),
+            '自定义展示模块，支持设置子目录。\n点击右下角「+ 添加顶级模块」；点击分类右侧「＋」可添加子目录。'),
         Expanded(
           child: _categories.isEmpty
-              ? _empty('暂无分类', '点击右下角 + 添加模块')
+              ? _empty('暂无分类', '点击右下角 + 添加顶级模块')
               : ReorderableListView.builder(
                   padding: const EdgeInsets.fromLTRB(16, 8, 16, 90),
                   onReorder: (a, b) {
@@ -238,74 +252,171 @@ class _ConfigEditorPageState extends State<ConfigEditorPage>
                     });
                   },
                   itemCount: _categories.length,
-                  itemBuilder: (_, i) =>
-                      _catCard(_categories[i], i, key: ValueKey(_categories[i].id)),
+                  itemBuilder: (_, i) => _catCard(
+                      _categories[i], i,
+                      key: ValueKey(_categories[i].id)),
                 ),
         ),
       ],
     );
   }
 
-  Widget _catCard(_CatItem cat, int idx, {required Key key}) {
-    return Card(
+  Widget _catCard(VideoCategory cat, int parentIdx, {required Key key}) {
+    return Column(
       key: key,
-      margin: const EdgeInsets.only(bottom: 10),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-        leading: CircleAvatar(
-          backgroundColor: const Color(0xFF1A73E8).withOpacity(0.12),
-          child: Text(
-            cat.nameZh.isNotEmpty ? cat.nameZh[0] : '?',
-            style: const TextStyle(
-                color: Color(0xFF1A73E8), fontWeight: FontWeight.bold),
+      children: [
+        // 顶级分类卡片
+        Card(
+          margin: const EdgeInsets.only(bottom: 2),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          child: ListTile(
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+            leading: CircleAvatar(
+              backgroundColor: _green.withOpacity(0.12),
+              child: Text(
+                cat.nameZh.isNotEmpty ? cat.nameZh[0] : '?',
+                style: const TextStyle(
+                    color: _green, fontWeight: FontWeight.bold),
+              ),
+            ),
+            title: Text(
+              '${cat.nameZh}  /  ${cat.nameEn}',
+              style: const TextStyle(
+                  fontWeight: FontWeight.w600, fontSize: 14),
+            ),
+            subtitle: Text('ID: ${cat.id}',
+                style: const TextStyle(
+                    fontSize: 12, color: Colors.black38)),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // 添加子分类
+                Tooltip(
+                  message: '添加子目录',
+                  child: IconButton(
+                    icon: const Icon(Icons.add_circle_outline,
+                        size: 20, color: _green),
+                    onPressed: () =>
+                        _showEditCatDialog(parentCat: cat, parentIdx: parentIdx),
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.edit_outlined,
+                      size: 20, color: _green),
+                  onPressed: () =>
+                      _showEditCatDialog(editIdx: parentIdx),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.delete_outline,
+                      size: 20, color: Colors.redAccent),
+                  onPressed: () => _deleteCat(parentIdx),
+                ),
+                const Padding(
+                  padding: EdgeInsets.only(left: 4),
+                  child: Icon(Icons.drag_handle,
+                      color: Colors.black26, size: 20),
+                ),
+              ],
+            ),
           ),
         ),
-        title: Text(
-          '${cat.nameZh}  /  ${cat.nameEn}',
-          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
-        ),
-        subtitle: Text('ID: ${cat.id}',
-            style: const TextStyle(fontSize: 12, color: Colors.black38)),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            IconButton(
-              icon: const Icon(Icons.edit_outlined,
-                  size: 20, color: Color(0xFF1A73E8)),
-              onPressed: () => _showEditCatDialog(idx),
-            ),
-            IconButton(
-              icon: const Icon(Icons.delete_outline,
-                  size: 20, color: Colors.redAccent),
-              onPressed: () => _deleteCat(idx),
-            ),
-            const Padding(
-              padding: EdgeInsets.only(left: 4),
-              child: Icon(Icons.drag_handle, color: Colors.black26, size: 20),
-            ),
-          ],
-        ),
-      ),
+        // 子分类列表（缩进展示）
+        if (cat.children.isNotEmpty)
+          ...cat.children.asMap().entries.map((entry) {
+            final subIdx = entry.key;
+            final sub = entry.value;
+            return Padding(
+              padding: const EdgeInsets.only(left: 28, bottom: 2),
+              child: Card(
+                margin: EdgeInsets.zero,
+                color: const Color(0xFFF8FFF6),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  side: BorderSide(
+                      color: _green.withOpacity(0.15), width: 1),
+                ),
+                child: ListTile(
+                  dense: true,
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 0),
+                  leading: Icon(Icons.subdirectory_arrow_right_rounded,
+                      color: _green.withOpacity(0.6), size: 18),
+                  title: Text(
+                    '${sub.nameZh}  /  ${sub.nameEn}',
+                    style: const TextStyle(fontSize: 13),
+                  ),
+                  subtitle: Text('ID: ${sub.id}',
+                      style: const TextStyle(
+                          fontSize: 11, color: Colors.black38)),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.edit_outlined,
+                            size: 18, color: _green),
+                        onPressed: () => _showEditCatDialog(
+                            editSubIdx: subIdx,
+                            parentCat: cat,
+                            parentIdx: parentIdx),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.delete_outline,
+                            size: 18, color: Colors.redAccent),
+                        onPressed: () =>
+                            _deleteSubCat(parentIdx, subIdx),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          }),
+        const SizedBox(height: 8),
+      ],
     );
   }
 
-  void _showEditCatDialog([int? editIdx]) {
-    final isEdit = editIdx != null;
-    final cat = isEdit ? _categories[editIdx] : null;
-    final idCtrl = TextEditingController(text: cat?.id ?? '');
-    final zhCtrl = TextEditingController(text: cat?.nameZh ?? '');
-    final enCtrl = TextEditingController(text: cat?.nameEn ?? '');
+  // ── 分类编辑对话框 ─────────────────────────────
+
+  /// [editIdx] = 编辑顶级分类
+  /// [editSubIdx] + [parentCat] = 编辑子分类
+  /// [parentCat] only = 添加子分类
+  /// 全 null = 添加顶级分类
+  void _showEditCatDialog({
+    int? editIdx,
+    int? editSubIdx,
+    VideoCategory? parentCat,
+    int? parentIdx,
+  }) {
+    final bool isEditParent = editIdx != null && editSubIdx == null;
+    final bool isEditSub = editSubIdx != null;
+    final bool isAddSub = parentCat != null && editSubIdx == null;
+
+    VideoCategory? editing;
+    if (isEditParent) editing = _categories[editIdx];
+    if (isEditSub) editing = parentCat!.children[editSubIdx];
+
+    final idCtrl = TextEditingController(text: editing?.id ?? '');
+    final zhCtrl = TextEditingController(text: editing?.nameZh ?? '');
+    final enCtrl = TextEditingController(text: editing?.nameEn ?? '');
+
+    String title;
+    if (isEditParent) title = '编辑顶级模块';
+    else if (isEditSub) title = '编辑子目录';
+    else if (isAddSub) title = '添加子目录 → ${parentCat!.nameZh}';
+    else title = '添加顶级模块';
 
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text(isEdit ? '编辑分类模块' : '添加分类模块'),
+        title: Text(title),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             _field(idCtrl, '分类 ID（英文唯一标识）', 'cat_product',
-                enabled: !isEdit),
+                enabled: editing == null),
             const SizedBox(height: 12),
             _field(zhCtrl, '中文名称', '产品'),
             const SizedBox(height: 12),
@@ -314,33 +425,81 @@ class _ConfigEditorPageState extends State<ConfigEditorPage>
         ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx), child: const Text('取消')),
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('取消')),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF1A73E8)),
+            style: ElevatedButton.styleFrom(backgroundColor: _green),
             onPressed: () {
               final id = idCtrl.text.trim();
               final zh = zhCtrl.text.trim();
               if (id.isEmpty || zh.isEmpty) return;
+
               setState(() {
-                if (isEdit) {
-                  _categories[editIdx] = _CatItem(
-                      id: id,
-                      nameZh: zh,
-                      nameEn: enCtrl.text.trim(),
-                      sortOrder: cat!.sortOrder);
+                if (isEditParent) {
+                  // 编辑顶级
+                  final old = _categories[editIdx];
+                  _categories[editIdx] = VideoCategory(
+                    id: id,
+                    nameZh: zh,
+                    nameEn: enCtrl.text.trim(),
+                    type: old.type,
+                    sortOrder: old.sortOrder,
+                    children: old.children,
+                  );
+                } else if (isEditSub) {
+                  // 编辑子分类
+                  final oldSubs =
+                      List<VideoCategory>.from(parentCat!.children);
+                  oldSubs[editSubIdx] = VideoCategory(
+                    id: id,
+                    nameZh: zh,
+                    nameEn: enCtrl.text.trim(),
+                    type: 'custom',
+                    sortOrder: editing!.sortOrder,
+                    parentId: parentCat.id,
+                  );
+                  _categories[parentIdx!] = VideoCategory(
+                    id: parentCat.id,
+                    nameZh: parentCat.nameZh,
+                    nameEn: parentCat.nameEn,
+                    type: parentCat.type,
+                    sortOrder: parentCat.sortOrder,
+                    children: oldSubs,
+                  );
+                } else if (isAddSub) {
+                  // 添加子分类
+                  final newSub = VideoCategory(
+                    id: id,
+                    nameZh: zh,
+                    nameEn: enCtrl.text.trim(),
+                    type: 'custom',
+                    sortOrder: parentCat!.children.length + 1,
+                    parentId: parentCat.id,
+                  );
+                  final newSubs = [...parentCat.children, newSub];
+                  _categories[parentIdx!] = VideoCategory(
+                    id: parentCat.id,
+                    nameZh: parentCat.nameZh,
+                    nameEn: parentCat.nameEn,
+                    type: parentCat.type,
+                    sortOrder: parentCat.sortOrder,
+                    children: newSubs,
+                  );
                 } else {
-                  _categories.add(_CatItem(
-                      id: id,
-                      nameZh: zh,
-                      nameEn: enCtrl.text.trim(),
-                      sortOrder: _categories.length + 1));
+                  // 添加顶级
+                  _categories.add(VideoCategory(
+                    id: id,
+                    nameZh: zh,
+                    nameEn: enCtrl.text.trim(),
+                    type: 'custom',
+                    sortOrder: _categories.length + 1,
+                  ));
                 }
                 _hasChanges = true;
               });
               Navigator.pop(ctx);
             },
-            child: Text(isEdit ? '保存' : '添加',
+            child: Text(editing != null ? '保存' : '添加',
                 style: const TextStyle(color: Colors.white)),
           ),
         ],
@@ -354,14 +513,52 @@ class _ConfigEditorPageState extends State<ConfigEditorPage>
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('删除分类'),
-        content: Text('确认删除「${cat.nameZh}」？'),
+        content: Text(
+            '确认删除「${cat.nameZh}」${cat.hasChildren ? "及其 ${cat.children.length} 个子目录" : ""}？'),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx), child: const Text('取消')),
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('取消')),
           TextButton(
             onPressed: () {
               setState(() {
                 _categories.removeAt(idx);
+                _hasChanges = true;
+              });
+              Navigator.pop(ctx);
+            },
+            child: const Text('删除', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _deleteSubCat(int parentIdx, int subIdx) {
+    final parent = _categories[parentIdx];
+    final sub = parent.children[subIdx];
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('删除子目录'),
+        content: Text('确认删除子目录「${sub.nameZh}」？'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('取消')),
+          TextButton(
+            onPressed: () {
+              setState(() {
+                final newSubs = List<VideoCategory>.from(parent.children)
+                  ..removeAt(subIdx);
+                _categories[parentIdx] = VideoCategory(
+                  id: parent.id,
+                  nameZh: parent.nameZh,
+                  nameEn: parent.nameEn,
+                  type: parent.type,
+                  sortOrder: parent.sortOrder,
+                  children: newSubs,
+                );
                 _hasChanges = true;
               });
               Navigator.pop(ctx);
@@ -380,8 +577,7 @@ class _ConfigEditorPageState extends State<ConfigEditorPage>
     return Column(
       children: [
         _banner(
-          '为视频文件设置标题和所属模块。\n文件名须与手机 ${LocalVideoScanner.videoFolder} 中一致。',
-        ),
+            '为视频文件设置标题和所属模块（可选子目录）。\n文件名须与手机 ${LocalVideoScanner.videoFolder} 中一致。'),
         Expanded(
           child: entries.isEmpty
               ? _empty('暂无视频配置', '点击右下角 + 添加视频')
@@ -399,10 +595,13 @@ class _ConfigEditorPageState extends State<ConfigEditorPage>
   Widget _videoCard(String fileName, Map<String, dynamic> cfg) {
     final titleZh = cfg['title_zh'] as String? ?? fileName;
     final catIds =
-        (cfg['category_ids'] as List?)?.map((e) => e.toString()).toList() ?? [];
+        (cfg['category_ids'] as List?)?.map((e) => e.toString()).toList() ??
+            [];
+    // 扁平化所有分类（含子分类）来找名字
+    final allFlat = _categories.expand((c) => c.flatten()).toList();
     final catNames = catIds.map((id) {
       try {
-        return _categories.firstWhere((c) => c.id == id).nameZh;
+        return allFlat.firstWhere((c) => c.id == id).nameZh;
       } catch (_) {
         return id;
       }
@@ -410,7 +609,8 @@ class _ConfigEditorPageState extends State<ConfigEditorPage>
 
     return Card(
       margin: const EdgeInsets.only(bottom: 10),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      shape:
+          RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: ListTile(
         contentPadding:
             const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
@@ -418,25 +618,23 @@ class _ConfigEditorPageState extends State<ConfigEditorPage>
           width: 44,
           height: 44,
           decoration: BoxDecoration(
-            color: const Color(0xFF1A73E8).withOpacity(0.1),
+            color: _green.withOpacity(0.1),
             borderRadius: BorderRadius.circular(8),
           ),
-          child: const Icon(Icons.videocam_outlined,
-              color: Color(0xFF1A73E8), size: 22),
+          child: const Icon(Icons.videocam_outlined, color: _green, size: 22),
         ),
         title: Text(titleZh,
-            style:
-                const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+            style: const TextStyle(
+                fontWeight: FontWeight.w600, fontSize: 14)),
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(fileName,
-                style:
-                    const TextStyle(fontSize: 11, color: Colors.black38)),
+                style: const TextStyle(
+                    fontSize: 11, color: Colors.black38)),
             if (catNames.isNotEmpty)
               Text('模块：$catNames',
-                  style: const TextStyle(
-                      fontSize: 11, color: Color(0xFF1A73E8))),
+                  style: const TextStyle(fontSize: 11, color: _green)),
           ],
         ),
         trailing: Row(
@@ -444,7 +642,7 @@ class _ConfigEditorPageState extends State<ConfigEditorPage>
           children: [
             IconButton(
               icon: const Icon(Icons.edit_outlined,
-                  size: 20, color: Color(0xFF1A73E8)),
+                  size: 20, color: _green),
               onPressed: () => _showEditVideoDialog(fileName),
             ),
             IconButton(
@@ -460,11 +658,14 @@ class _ConfigEditorPageState extends State<ConfigEditorPage>
 
   void _showEditVideoDialog(String? editFile) {
     final isEdit = editFile != null;
-    final cfg = isEdit ? Map<String, dynamic>.from(_videoMap[editFile]!) : {};
+    final cfg =
+        isEdit ? Map<String, dynamic>.from(_videoMap[editFile]!) : {};
 
     final fileCtrl = TextEditingController(text: editFile ?? '');
-    final zhCtrl = TextEditingController(text: cfg['title_zh'] as String? ?? '');
-    final enCtrl = TextEditingController(text: cfg['title_en'] as String? ?? '');
+    final zhCtrl =
+        TextEditingController(text: cfg['title_zh'] as String? ?? '');
+    final enCtrl =
+        TextEditingController(text: cfg['title_en'] as String? ?? '');
     final descZhCtrl =
         TextEditingController(text: cfg['description_zh'] as String? ?? '');
     final descEnCtrl =
@@ -476,6 +677,9 @@ class _ConfigEditorPageState extends State<ConfigEditorPage>
                 .toList() ??
             [])
         .toSet();
+
+    // 扁平化分类（含子分类）供选择
+    final allFlat = _categories.expand((c) => c.flatten()).toList();
 
     showDialog(
       context: context,
@@ -504,29 +708,15 @@ class _ConfigEditorPageState extends State<ConfigEditorPage>
                   _field(durCtrl, '时长（秒，可选）', '120',
                       type: TextInputType.number),
                   const SizedBox(height: 14),
-                  const Text('所属模块',
+                  const Text('所属模块（可选子目录）',
                       style: TextStyle(
                           fontSize: 13, fontWeight: FontWeight.w500)),
                   const SizedBox(height: 8),
-                  _categories.isEmpty
+                  allFlat.isEmpty
                       ? const Text('先在「分类模块」中添加分类',
                           style: TextStyle(
                               color: Colors.black45, fontSize: 12))
-                      : Wrap(
-                          spacing: 8,
-                          runSpacing: 4,
-                          children: _categories
-                              .map((c) => FilterChip(
-                                    label: Text(c.nameZh),
-                                    selected: selCats.contains(c.id),
-                                    selectedColor: const Color(0xFF1A73E8)
-                                        .withOpacity(0.15),
-                                    checkmarkColor: const Color(0xFF1A73E8),
-                                    onSelected: (v) => setDS(() =>
-                                        v ? selCats.add(c.id) : selCats.remove(c.id)),
-                                  ))
-                              .toList(),
-                        ),
+                      : _buildCatSelector(allFlat, selCats, setDS),
                   const SizedBox(height: 12),
                 ],
               ),
@@ -537,8 +727,8 @@ class _ConfigEditorPageState extends State<ConfigEditorPage>
                 onPressed: () => Navigator.pop(ctx),
                 child: const Text('取消')),
             ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF1A73E8)),
+              style:
+                  ElevatedButton.styleFrom(backgroundColor: _green),
               onPressed: () {
                 final file = fileCtrl.text.trim();
                 if (file.isEmpty) return;
@@ -551,8 +741,9 @@ class _ConfigEditorPageState extends State<ConfigEditorPage>
                   'category_ids': selCats.toList(),
                   if (durCtrl.text.trim().isNotEmpty)
                     'duration': int.tryParse(durCtrl.text.trim()),
-                  'sort_order': _videoMap[editFile ?? '']?['sort_order'] ??
-                      _videoMap.length,
+                  'sort_order':
+                      _videoMap[editFile ?? '']?['sort_order'] ??
+                          _videoMap.length,
                 };
                 setState(() {
                   if (isEdit) _videoMap.remove(editFile);
@@ -570,15 +761,69 @@ class _ConfigEditorPageState extends State<ConfigEditorPage>
     );
   }
 
+  /// 分层渲染分类选择器（顶级 + 子级缩进）
+  Widget _buildCatSelector(
+      List<VideoCategory> flat, Set<String> selCats, StateSetter setDS) {
+    // 只使用顶级分类来分组渲染
+    final topLevel = _categories;
+    final rows = <Widget>[];
+    for (final parent in topLevel) {
+      // 顶级标签
+      rows.add(
+        Padding(
+          padding: const EdgeInsets.only(top: 4),
+          child: FilterChip(
+            label: Text(parent.nameZh),
+            selected: selCats.contains(parent.id),
+            selectedColor: _green.withOpacity(0.15),
+            checkmarkColor: _green,
+            avatar: Icon(Icons.folder_outlined, size: 14, color: _green.withOpacity(0.7)),
+            onSelected: (v) => setDS(() =>
+                v ? selCats.add(parent.id) : selCats.remove(parent.id)),
+          ),
+        ),
+      );
+      // 子级标签（缩进）
+      if (parent.children.isNotEmpty) {
+        rows.add(
+          Padding(
+            padding: const EdgeInsets.only(left: 16),
+            child: Wrap(
+              spacing: 6,
+              runSpacing: 4,
+              children: parent.children
+                  .map((sub) => FilterChip(
+                        label: Text(sub.nameZh),
+                        selected: selCats.contains(sub.id),
+                        selectedColor: _green.withOpacity(0.12),
+                        checkmarkColor: _green,
+                        labelStyle: const TextStyle(fontSize: 12),
+                        onSelected: (v) => setDS(() =>
+                            v ? selCats.add(sub.id) : selCats.remove(sub.id)),
+                      ))
+                  .toList(),
+            ),
+          ),
+        );
+      }
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: rows,
+    );
+  }
+
   void _deleteVideo(String fileName) {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('删除视频配置'),
-        content: Text('确认删除「$fileName」的配置？\n（不会删除手机上的视频文件）'),
+        content: Text(
+            '确认删除「$fileName」的配置？\n（不会删除手机上的视频文件）'),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx), child: const Text('取消')),
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('取消')),
           TextButton(
             onPressed: () {
               setState(() {
@@ -594,25 +839,25 @@ class _ConfigEditorPageState extends State<ConfigEditorPage>
     );
   }
 
-  // ── 通用小组件 ─────────────────────────────────
+  // ── 通用组件 ─────────────────────────────────
 
   Widget _banner(String text) {
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 12, 16, 4),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
-        color: const Color(0xFF1A73E8).withOpacity(0.07),
+        color: _green.withOpacity(0.07),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: const Color(0xFF1A73E8).withOpacity(0.2)),
+        border: Border.all(color: _green.withOpacity(0.2)),
       ),
       child: Row(
         children: [
-          const Icon(Icons.info_outline, size: 16, color: Color(0xFF1A73E8)),
+          const Icon(Icons.info_outline, size: 16, color: _green),
           const SizedBox(width: 10),
           Expanded(
             child: Text(text,
-                style:
-                    const TextStyle(fontSize: 12, color: Color(0xFF444444))),
+                style: const TextStyle(
+                    fontSize: 12, color: Color(0xFF444444))),
           ),
         ],
       ),
@@ -658,29 +903,13 @@ class _ConfigEditorPageState extends State<ConfigEditorPage>
         hintText: hint.isEmpty ? null : hint,
         hintStyle: const TextStyle(color: Colors.black26, fontSize: 13),
         isDense: true,
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+        border:
+            OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
-          borderSide:
-              const BorderSide(color: Color(0xFF1A73E8), width: 1.5),
+          borderSide: const BorderSide(color: _green, width: 1.5),
         ),
       ),
     );
   }
-}
-
-// ── 数据类 ──────────────────────────────────────
-
-class _CatItem {
-  final String id;
-  final String nameZh;
-  final String nameEn;
-  final int sortOrder;
-
-  _CatItem({
-    required this.id,
-    required this.nameZh,
-    required this.nameEn,
-    required this.sortOrder,
-  });
 }

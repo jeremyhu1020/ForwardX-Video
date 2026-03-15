@@ -37,13 +37,15 @@ class VideoProvider extends ChangeNotifier {
   DataMode get mode => _mode;
   bool get isLocalMode => _mode == DataMode.local;
 
-  /// 筛选后的视频列表
+  /// 筛选后的视频列表（点击父分类时，同时显示其子分类下的视频）
   List<VideoItem> get filteredItems {
     var result = _allItems.where((v) => v.isPublished).toList();
 
     if (_selectedCategoryId.isNotEmpty) {
+      // 找到选中分类及其所有子孙分类的 ID 集合
+      final matchIds = _collectCategoryIds(_selectedCategoryId, _categories);
       result = result
-          .where((v) => v.categoryIds.contains(_selectedCategoryId))
+          .where((v) => v.categoryIds.any((id) => matchIds.contains(id)))
           .toList();
     }
 
@@ -60,6 +62,21 @@ class VideoProvider extends ChangeNotifier {
 
     result.sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
     return result;
+  }
+
+  /// 收集指定分类 ID 及其所有子孙 ID（用于父分类聚合筛选）
+  Set<String> _collectCategoryIds(
+      String targetId, List<VideoCategory> categories) {
+    for (final cat in categories) {
+      if (cat.id == targetId) {
+        // 找到了，收集其所有子孙
+        return cat.flatten().map((c) => c.id).toSet();
+      }
+      // 递归查子分类
+      final found = _collectCategoryIds(targetId, cat.children);
+      if (found.isNotEmpty) return found;
+    }
+    return {targetId}; // 没找到就直接用原 ID
   }
 
   /// 初始化：自动检测模式并加载数据

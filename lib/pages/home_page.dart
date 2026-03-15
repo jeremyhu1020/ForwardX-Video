@@ -57,7 +57,7 @@ class _HomePageState extends State<HomePage> {
   Widget _buildHeader() {
     final l10n = AppLocalizations.of(context);
     return Container(
-      color: const Color(0xFF1A73E8),
+      color: const Color(0xFF2BB80F),
       padding: const EdgeInsets.fromLTRB(20, 16, 12, 16),
       child: Row(
         children: [
@@ -175,8 +175,7 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  // ── 分类标签横向滚动 ───────────────────────────
-
+  // ── 分类大方块图标 + 二级子分类 ─────────────────
   Widget _buildCategoryTabs() {
     return Consumer2<VideoProvider, LocaleProvider>(
       builder: (_, provider, localeProvider, __) {
@@ -187,35 +186,173 @@ class _HomePageState extends State<HomePage> {
           return const SizedBox(height: 10);
         }
 
+        // 分离「全部」和普通分类
+        final allCat = categories.where((c) => c.type == 'all').firstOrNull;
+        final topCats = categories.where((c) => c.type != 'all').toList();
+
+        // 找到当前选中的顶级分类
+        final selectedId = provider.selectedCategoryId;
+        VideoCategory? activeCat;
+        for (final cat in topCats) {
+          final allIds = cat.flatten().map((c) => c.id).toSet();
+          if (allIds.contains(selectedId) || cat.id == selectedId) {
+            activeCat = cat;
+            break;
+          }
+        }
+
         return Container(
           color: Colors.white,
-          padding: const EdgeInsets.symmetric(vertical: 10),
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Row(
-              children: categories.map((cat) {
-                final isSelected = cat.type == 'all'
-                    ? provider.selectedCategoryId.isEmpty
-                    : provider.selectedCategoryId == cat.id;
-                return Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: _buildCategoryChip(
-                    label: cat.getName(isZh),
-                    selected: isSelected,
-                    onTap: () => provider.selectCategory(
-                        cat.type == 'all' ? '' : cat.id),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // 大方块图标行
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 10, 12, 0),
+                child: Row(
+                  children: [
+                    // 「全部」方块
+                    if (allCat != null)
+                      _buildCategoryBlock(
+                        label: allCat.getName(isZh),
+                        icon: Icons.apps_rounded,
+                        selected: selectedId.isEmpty,
+                        onTap: () => provider.selectCategory(''),
+                      ),
+                    if (allCat != null) const SizedBox(width: 8),
+                    // 其他顶级分类方块
+                    Expanded(
+                      child: SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          children: topCats.map((cat) {
+                            final catSelected =
+                                cat.id == selectedId ||
+                                    cat.flatten()
+                                        .any((c) => c.id == selectedId);
+                            return Padding(
+                              padding: const EdgeInsets.only(right: 8),
+                              child: _buildCategoryBlock(
+                                label: cat.getName(isZh),
+                                icon: _iconForCategory(cat),
+                                selected: catSelected,
+                                hasChildren: cat.hasChildren,
+                                onTap: () => provider.selectCategory(
+                                    catSelected && cat.id == selectedId
+                                        ? cat.id
+                                        : cat.id),
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              // 二级子分类横向标签（仅当激活的父分类有 children 时显示）
+              if (activeCat != null && activeCat.hasChildren) ...[
+                const SizedBox(height: 6),
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+                  child: Row(
+                    children: [
+                      // 子级「全部」标签（显示父分类所有视频）
+                      Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: _buildSubChip(
+                          label: isZh ? '全部${activeCat.getName(isZh)}' : 'All',
+                          selected: selectedId == activeCat.id,
+                          onTap: () => provider.selectCategory(activeCat!.id),
+                        ),
+                      ),
+                      ...activeCat.children.map((sub) => Padding(
+                            padding: const EdgeInsets.only(right: 8),
+                            child: _buildSubChip(
+                              label: sub.getName(isZh),
+                              selected: selectedId == sub.id,
+                              onTap: () => provider.selectCategory(sub.id),
+                            ),
+                          )),
+                    ],
                   ),
-                );
-              }).toList(),
-            ),
+                ),
+              ] else
+                const SizedBox(height: 8),
+            ],
           ),
         );
       },
     );
   }
 
-  Widget _buildCategoryChip({
+  /// 大方块分类图标
+  Widget _buildCategoryBlock({
+    required String label,
+    required IconData icon,
+    required bool selected,
+    required VoidCallback onTap,
+    bool hasChildren = false,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        width: 72,
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        decoration: BoxDecoration(
+          color: selected
+              ? const Color(0xFF2BB80F)
+              : const Color(0xFFF5F7FA),
+          borderRadius: BorderRadius.circular(14),
+          boxShadow: selected
+              ? [
+                  BoxShadow(
+                    color: const Color(0xFF2BB80F).withOpacity(0.3),
+                    blurRadius: 8,
+                    offset: const Offset(0, 3),
+                  )
+                ]
+              : [],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              size: 28,
+              color: selected ? Colors.white : const Color(0xFF2BB80F),
+            ),
+            const SizedBox(height: 5),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight:
+                    selected ? FontWeight.w700 : FontWeight.w500,
+                color: selected ? Colors.white : const Color(0xFF444444),
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+            ),
+            if (hasChildren)
+              Icon(
+                Icons.keyboard_arrow_down_rounded,
+                size: 12,
+                color: selected
+                    ? Colors.white70
+                    : const Color(0xFF2BB80F).withOpacity(0.7),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// 二级子分类小标签
+  Widget _buildSubChip({
     required String label,
     required bool selected,
     required VoidCallback onTap,
@@ -223,23 +360,50 @@ class _HomePageState extends State<HomePage> {
     return GestureDetector(
       onTap: onTap,
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
         decoration: BoxDecoration(
-          color: selected ? const Color(0xFF1A73E8) : const Color(0xFFF0F2F5),
-          borderRadius: BorderRadius.circular(20),
+          color: selected
+              ? const Color(0xFF2BB80F).withOpacity(0.12)
+              : const Color(0xFFF0F2F5),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: selected
+                ? const Color(0xFF2BB80F)
+                : Colors.transparent,
+            width: 1.2,
+          ),
         ),
         child: Text(
           label,
           style: TextStyle(
-            fontSize: 13,
+            fontSize: 12,
             fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
-            color: selected ? Colors.white : const Color(0xFF555555),
+            color: selected
+                ? const Color(0xFF2BB80F)
+                : const Color(0xFF666666),
           ),
         ),
       ),
     );
   }
+
+  /// 根据分类名称/ID 返回合适的图标
+  IconData _iconForCategory(VideoCategory cat) {
+    final name = cat.nameZh.toLowerCase() + cat.id.toLowerCase();
+    if (name.contains('产品') || name.contains('product')) {
+      return Icons.precision_manufacturing_rounded;
+    } else if (name.contains('场景') || name.contains('scene')) {
+      return Icons.account_balance_rounded;
+    } else if (name.contains('案例') || name.contains('case')) {
+      return Icons.workspace_premium_rounded;
+    } else if (name.contains('视频') || name.contains('video')) {
+      return Icons.play_circle_outline_rounded;
+    }
+    return Icons.folder_rounded;
+  }
+
+
 
   // ── 视频网格 ─────────────────────────────────
 
@@ -255,7 +419,7 @@ class _HomePageState extends State<HomePage> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                CircularProgressIndicator(color: Color(0xFF1A73E8)),
+                CircularProgressIndicator(color: Color(0xFF2BB80F)),
                 SizedBox(height: 16),
                 Text('加载中...', style: TextStyle(color: Colors.black45)),
               ],
@@ -435,10 +599,10 @@ class _HomePageState extends State<HomePage> {
 
   Widget _buildPlaceholderThumb() {
     return Container(
-      color: const Color(0xFF1A73E8).withOpacity(0.08),
+      color: const Color(0xFF2BB80F).withOpacity(0.08),
       child: const Center(
         child: Icon(Icons.play_circle_outline,
-            color: Color(0xFF1A73E8), size: 36),
+            color: Color(0xFF2BB80F), size: 36),
       ),
     );
   }
@@ -471,7 +635,7 @@ class _HomePageState extends State<HomePage> {
           mainAxisSize: MainAxisSize.min,
           children: [
             ListTile(
-              leading: const Icon(Icons.wifi_off_rounded, color: Color(0xFF1A73E8)),
+              leading: const Icon(Icons.wifi_off_rounded, color: Color(0xFF2BB80F)),
               title: const Text('本地模式（展会离线）'),
               subtitle: Text(LocalVideoScanner.videoFolder,
                   style: const TextStyle(fontSize: 11)),
@@ -482,7 +646,7 @@ class _HomePageState extends State<HomePage> {
               },
             ),
             ListTile(
-              leading: const Icon(Icons.cloud_outlined, color: Color(0xFF1A73E8)),
+              leading: const Icon(Icons.cloud_outlined, color: Color(0xFF2BB80F)),
               title: const Text('云端模式（在线）'),
               subtitle: const Text('从 Supabase 加载视频',
                   style: TextStyle(fontSize: 11)),

@@ -4,71 +4,55 @@
       "id": "cat_product",
       "name_zh": "产品",
       "name_en": "Products",
-      "sort_order": 1
+      "sort_order": 1,
+      "children": [
+        { "id": "cat_amr", "name_zh": "AMR机器人", "name_en": "AMR Robot", "sort_order": 1 },
+        { "id": "cat_agv", "name_zh": "AGV小车", "name_en": "AGV Cart", "sort_order": 2 },
+        { "id": "cat_arm", "name_zh": "协作机械臂", "name_en": "Cobot Arm", "sort_order": 3 }
+      ]
     },
     {
       "id": "cat_scene",
       "name_zh": "场景",
       "name_en": "Scenes",
-      "sort_order": 2
+      "sort_order": 2,
+      "children": [
+        { "id": "cat_warehouse", "name_zh": "智能仓储", "name_en": "Smart Warehouse", "sort_order": 1 },
+        { "id": "cat_factory", "name_zh": "智能工厂", "name_en": "Smart Factory", "sort_order": 2 },
+        { "id": "cat_retail", "name_zh": "零售配送", "name_en": "Retail Delivery", "sort_order": 3 }
+      ]
     },
     {
       "id": "cat_case",
       "name_zh": "案例",
       "name_en": "Cases",
-      "sort_order": 3
+      "sort_order": 3,
+      "children": [
+        { "id": "cat_case_mfg", "name_zh": "制造业", "name_en": "Manufacturing", "sort_order": 1 },
+        { "id": "cat_case_ecom", "name_zh": "电商物流", "name_en": "E-commerce", "sort_order": 2 }
+      ]
     }
   ],
   "videos": [
     {
-      "file": "amr_robot.mp4",
-      "title_zh": "AMR机器人演示",
-      "title_en": "AMR Robot Demo",
-      "description_zh": "展示AMR移动机器人在仓储场景中的自动导航和搬运能力",
-      "description_en": "AMR robot autonomous navigation in warehouse",
-      "category_ids": ["cat_product"],
+      "file": "amr_demo.mp4",
+      "title_zh": "AMR机器人仓库演示",
+      "title_en": "AMR Warehouse Demo",
+      "description_zh": "展示AMR移动机器人在仓储场景中的自动导航和货架搬运能力",
+      "description_en": "AMR autonomous navigation and shelf handling in warehouse",
+      "category_ids": ["cat_product", "cat_amr", "cat_warehouse"],
       "duration": 120,
       "sort_order": 1
     },
     {
-      "file": "forklift_demo.mp4",
-      "title_zh": "叉车机器人演示",
-      "title_en": "Forklift Robot Demo",
-      "description_zh": "叉车机器人自动装卸货物演示",
-      "description_en": "Forklift robot automatic loading demo",
-      "category_ids": ["cat_product"],
-      "duration": 90,
-      "sort_order": 2
-    },
-    {
-      "file": "warehouse_scene.mp4",
-      "title_zh": "智能仓储场景",
-      "title_en": "Smart Warehouse Scene",
-      "description_zh": "机器人在智能仓储环境中协同作业演示",
-      "description_en": "Robots collaborating in smart warehouse",
-      "category_ids": ["cat_scene"],
+      "file": "factory_line.mp4",
+      "title_zh": "智能工厂产线案例",
+      "title_en": "Smart Factory Line Case",
+      "description_zh": "ForwardX机器人在某制造企业生产线的实际应用案例",
+      "description_en": "ForwardX robots in a real manufacturing production line",
+      "category_ids": ["cat_scene", "cat_factory", "cat_case_mfg"],
       "duration": 180,
-      "sort_order": 3
-    },
-    {
-      "file": "factory_scene.mp4",
-      "title_zh": "智能制造场景",
-      "title_en": "Smart Factory Scene",
-      "description_zh": "工厂自动化产线机器人协作演示",
-      "description_en": "Factory automation robot collaboration",
-      "category_ids": ["cat_scene"],
-      "duration": 150,
-      "sort_order": 4
-    },
-    {
-      "file": "customer_case.mp4",
-      "title_zh": "客户成功案例",
-      "title_en": "Customer Success Case",
-      "description_zh": "某大型电商仓库实际落地案例展示",
-      "description_en": "Large e-commerce warehouse deployment case",
-      "category_ids": ["cat_case"],
-      "duration": 200,
-      "sort_order": 5
+      "sort_order": 2
     }
   ]
 }

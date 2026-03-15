@@ -26,18 +26,12 @@ class LocalVideoScanner {
       final content = await file.readAsString();
       final json = jsonDecode(content) as Map<String, dynamic>;
 
-      // 读取自定义分类列表
+      // 读取自定义分类列表（支持含 children 的二级分类）
       final List<VideoCategory> categories = [];
       if (json.containsKey('categories')) {
         for (final cat in json['categories'] as List) {
-          final m = cat as Map<String, dynamic>;
-          categories.add(VideoCategory(
-            id: m['id'] as String? ?? '',
-            nameZh: m['name_zh'] as String? ?? '',
-            nameEn: m['name_en'] as String? ?? '',
-            type: m['type'] as String? ?? 'custom',
-            sortOrder: m['sort_order'] as int? ?? 0,
-          ));
+          categories.add(
+              VideoCategory.fromConfig(cat as Map<String, dynamic>));
         }
       }
 
@@ -174,7 +168,7 @@ class LocalVideoScanner {
     }
   }
 
-  /// 生成示例配置文件内容（供用户参考）
+  /// 生成示例配置文件内容（支持二级子分类）
   static String get sampleConfig => const JsonEncoder.withIndent('  ').convert({
     'categories': [
       {
@@ -182,12 +176,26 @@ class LocalVideoScanner {
         'name_zh': '产品',
         'name_en': 'Products',
         'sort_order': 1,
+        'children': [
+          {'id': 'cat_amr', 'name_zh': 'AMR机器人', 'name_en': 'AMR Robot', 'sort_order': 1},
+          {'id': 'cat_agv', 'name_zh': 'AGV小车', 'name_en': 'AGV', 'sort_order': 2},
+        ],
       },
       {
         'id': 'cat_scene',
         'name_zh': '场景',
         'name_en': 'Scenes',
         'sort_order': 2,
+        'children': [
+          {'id': 'cat_warehouse', 'name_zh': '智能仓储', 'name_en': 'Warehouse', 'sort_order': 1},
+          {'id': 'cat_factory', 'name_zh': '智能工厂', 'name_en': 'Factory', 'sort_order': 2},
+        ],
+      },
+      {
+        'id': 'cat_case',
+        'name_zh': '案例',
+        'name_en': 'Cases',
+        'sort_order': 3,
       },
     ],
     'videos': [
@@ -197,7 +205,7 @@ class LocalVideoScanner {
         'title_en': 'AMR Robot Demo',
         'description_zh': '展示AMR移动机器人在仓储场景中的自动导航和搬运能力',
         'description_en': 'AMR robot autonomous navigation in warehouse',
-        'category_ids': ['cat_product'],
+        'category_ids': ['cat_product', 'cat_amr'],
         'duration': 120,
         'sort_order': 1,
       },

@@ -54,8 +54,8 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
         showControls: true,
         placeholder: Container(color: Colors.black),
         materialProgressColors: ChewieProgressColors(
-          playedColor: const Color(0xFF1A73E8),
-          handleColor: const Color(0xFF1A73E8),
+          playedColor: const Color(0xFF2BB80F),
+          handleColor: const Color(0xFF2BB80F),
           bufferedColor: Colors.white30,
           backgroundColor: Colors.white12,
         ),

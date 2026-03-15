@@ -57,7 +57,7 @@ class VideoShowcaseApp extends StatelessWidget {
 
             theme: ThemeData(
               colorScheme: ColorScheme.fromSeed(
-                seedColor: const Color(0xFF1A73E8),
+                seedColor: const Color(0xFF2BB80F),
                 brightness: Brightness.light,
               ),
               useMaterial3: true,

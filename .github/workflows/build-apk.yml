@@ -79,14 +79,23 @@ jobs:
 
             自动构建版本，提交：`${{ github.sha }}`
 
+            ### 📥 国内高速下载（推荐）
+
+            | 镜像站 | 下载链接 |
+            |--------|---------|
+            | 🚀 ghproxy | [app-release.apk（高速）](https://mirror.ghproxy.com/https://github.com/jeremyhu1020/ForwardX-Video/releases/download/build-${{ github.run_number }}/app-release.apk) |
+            | 🚀 gh.ddlc | [app-release.apk（备用）](https://gh.ddlc.top/https://github.com/jeremyhu1020/ForwardX-Video/releases/download/build-${{ github.run_number }}/app-release.apk) |
+
+            ### 🌐 GitHub 原始下载（境外网络）
+            见下方 Assets 附件
+
             ### 安装方法
-            1. 下载下方的 `app-release.apk`
-            2. 在 Android 手机上允许"安装未知来源应用"
+            1. 点击上方「高速下载」链接
+            2. 在 Android 手机上允许「安装未知来源应用」
             3. 打开 APK 文件安装
 
             > ⚠️ 此版本为测试签名，仅供内部测试使用
           files: |
-            build/app/outputs/flutter-apk/app-debug.apk
             build/app/outputs/flutter-apk/app-release.apk
           draft: false
           prerelease: true

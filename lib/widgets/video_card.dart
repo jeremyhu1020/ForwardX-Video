@@ -129,10 +129,10 @@ class VideoCard extends StatelessWidget {
 
   Widget _placeholderWidget() {
     return Container(
-      color: const Color(0xFF1A73E8).withOpacity(0.08),
+      color: const Color(0xFF2BB80F).withOpacity(0.08),
       child: const Center(
         child: Icon(Icons.play_circle_outline,
-            color: Color(0xFF1A73E8), size: 36),
+            color: Color(0xFF2BB80F), size: 36),
       ),
     );
   }
