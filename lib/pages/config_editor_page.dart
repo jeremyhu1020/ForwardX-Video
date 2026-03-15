@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
 import '../data/local_video_scanner.dart';
 import '../data/video_provider.dart';
@@ -118,12 +119,49 @@ class _ConfigEditorPageState extends State<ConfigEditorPage>
       ));
       context.read<VideoProvider>().switchToLocal();
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('❌ 保存失败，请检查文件权限'),
-        backgroundColor: Colors.red,
-        behavior: SnackBarBehavior.floating,
-      ));
+      // 保存失败：引导用户去系统设置开启权限
+      _showPermissionDialog();
     }
+  }
+
+  void _showPermissionDialog() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.folder_off_outlined, color: Colors.orange),
+            SizedBox(width: 8),
+            Text('需要文件访问权限'),
+          ],
+        ),
+        content: const Text(
+          '保存失败，App 需要「所有文件访问权限」才能写入配置文件。\n\n'
+          '请按以下步骤操作：\n'
+          '① 点击「去设置」\n'
+          '② 找到「ForwardX」App\n'
+          '③ 开启「所有文件访问权限」\n'
+          '④ 返回 App 重新保存',
+          style: TextStyle(fontSize: 14, height: 1.6),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('取消'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF1A73E8)),
+            onPressed: () {
+              Navigator.pop(ctx);
+              openAppSettings(); // 跳转系统设置
+            },
+            child: const Text('去设置',
+                style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
   }
 
   // ── 主体 UI ──────────────────────────────────

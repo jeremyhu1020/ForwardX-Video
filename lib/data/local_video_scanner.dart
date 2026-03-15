@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:convert';
 import 'package:path/path.dart' as p;
+import 'package:permission_handler/permission_handler.dart';
 import '../models/video_item.dart';
 
 /// 本地视频扫描服务
@@ -133,13 +134,40 @@ class LocalVideoScanner {
     return file.readAsString();
   }
 
-  /// 保存 config.json 文本内容
+  /// 保存 config.json 文本内容（保存前自动申请存储权限）
   static Future<bool> saveConfigText(String content) async {
     try {
       // 先验证 JSON 合法性
       jsonDecode(content);
+    } catch (_) {
+      return false; // JSON 格式错误
+    }
+
+    try {
+      // Android 11+：申请 MANAGE_EXTERNAL_STORAGE 权限
+      if (Platform.isAndroid) {
+        // 优先申请管理所有文件权限（Android 11+）
+        final manageStatus = await Permission.manageExternalStorage.status;
+        if (!manageStatus.isGranted) {
+          final result = await Permission.manageExternalStorage.request();
+          if (!result.isGranted) {
+            // 降级：尝试普通写入权限（Android 10 及以下）
+            final writeStatus = await Permission.storage.request();
+            if (!writeStatus.isGranted) {
+              return false;
+            }
+          }
+        }
+      }
+
+      // 确保目录存在
+      final dir = Directory(videoFolder);
+      if (!await dir.exists()) {
+        await dir.create(recursive: true);
+      }
+
       final file = File(configFile);
-      await file.writeAsString(content);
+      await file.writeAsString(content, flush: true);
       return true;
     } catch (_) {
       return false;
