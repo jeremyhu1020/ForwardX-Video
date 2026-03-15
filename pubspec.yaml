@@ -36,6 +36,15 @@ dependencies:
   # 网络图片缓存
   cached_network_image: ^3.3.1
 
+  # 读取手机存储路径
+  path_provider: ^2.1.2
+
+  # 文件/目录操作
+  path: ^1.9.0
+
+  # 读取存储权限
+  permission_handler: ^11.3.1
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

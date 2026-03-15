@@ -1,0 +1,31 @@
+{
+  "videos": [
+    {
+      "file": "robot_demo.mp4",
+      "title_zh": "AMR机器人演示",
+      "title_en": "AMR Robot Demo",
+      "description_zh": "展示AMR移动机器人在仓储场景中的自动导航和搬运能力",
+      "description_en": "AMR robot autonomous navigation in warehouse",
+      "duration": 120,
+      "sort_order": 1
+    },
+    {
+      "file": "forklift_demo.mp4",
+      "title_zh": "叉车机器人演示",
+      "title_en": "Forklift Robot Demo",
+      "description_zh": "叉车机器人自动装卸货物演示",
+      "description_en": "Forklift robot automatic loading demo",
+      "duration": 90,
+      "sort_order": 2
+    },
+    {
+      "file": "composite_robot.mp4",
+      "title_zh": "复合机器人演示",
+      "title_en": "Composite Robot Demo",
+      "description_zh": "复合机器人搬运+操作一体化演示",
+      "description_en": "Composite robot with manipulation demo",
+      "duration": 150,
+      "sort_order": 3
+    }
+  ]
+}

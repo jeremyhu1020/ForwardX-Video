@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -34,9 +35,11 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
       VideoPlayerController controller;
 
       if (url.startsWith('http://') || url.startsWith('https://')) {
+        // 网络视频
         controller = VideoPlayerController.networkUrl(Uri.parse(url));
       } else {
-        controller = VideoPlayerController.asset(url);
+        // 本地文件
+        controller = VideoPlayerController.file(File(url));
       }
 
       _videoController = controller;

@@ -1,8 +1,10 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../data/video_provider.dart';
 import '../data/locale_provider.dart';
+import '../data/local_video_scanner.dart';
 import '../l10n/app_localizations.dart';
 import '../models/video_item.dart';
 import 'video_player_page.dart';
@@ -101,6 +103,18 @@ class _HomePageState extends State<HomePage> {
                           const TextStyle(fontSize: 12, color: Colors.white)),
                 ],
               ),
+            ),
+          ),
+          // 模式切换按钮
+          Consumer<VideoProvider>(
+            builder: (_, provider, __) => IconButton(
+              icon: Icon(
+                provider.isLocalMode ? Icons.wifi_off_rounded : Icons.cloud_outlined,
+                color: Colors.white,
+                size: 22,
+              ),
+              tooltip: provider.isLocalMode ? '当前：本地模式' : '当前：云端模式',
+              onPressed: () => _showModeSwitchDialog(provider),
             ),
           ),
           // 刷新按钮
@@ -234,7 +248,7 @@ class _HomePageState extends State<HomePage> {
           );
         }
 
-        // 加载失败
+  // ── 加载失败
         if (provider.errorMessage != null) {
           return Center(
             child: Column(
@@ -243,10 +257,21 @@ class _HomePageState extends State<HomePage> {
                 const Icon(Icons.cloud_off_outlined,
                     size: 64, color: Colors.black26),
                 const SizedBox(height: 16),
-                Text(
+                const Text(
                   '加载失败，请检查网络',
-                  style: const TextStyle(color: Colors.black45, fontSize: 15),
+                  style: TextStyle(color: Colors.black45, fontSize: 15),
                 ),
+                const SizedBox(height: 4),
+                // 本地模式提示
+                if (provider.isLocalMode)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 32),
+                    child: Text(
+                      '未找到视频文件夹\n请将视频复制到：\n${LocalVideoScanner.videoFolder}',
+                      style: const TextStyle(color: Colors.black38, fontSize: 12),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
                 const SizedBox(height: 8),
                 TextButton(
                   onPressed: () => provider.retry(),
@@ -335,18 +360,7 @@ class _HomePageState extends State<HomePage> {
                 aspectRatio: 16 / 9,
                 child: video.thumbnailUrl != null &&
                         video.thumbnailUrl!.isNotEmpty
-                    ? CachedNetworkImage(
-                        imageUrl: video.thumbnailUrl!,
-                        fit: BoxFit.cover,
-                        placeholder: (_, __) => Container(
-                          color: const Color(0xFF1A73E8).withOpacity(0.1),
-                          child: const Center(
-                            child: Icon(Icons.play_circle_outline,
-                                color: Color(0xFF1A73E8), size: 36),
-                          ),
-                        ),
-                        errorWidget: (_, __, ___) => _buildPlaceholderThumb(),
-                      )
+                    ? _buildThumbnail(video.thumbnailUrl!)
                     : _buildPlaceholderThumb(),
               ),
             ),
@@ -410,6 +424,61 @@ class _HomePageState extends State<HomePage> {
       child: const Center(
         child: Icon(Icons.play_circle_outline,
             color: Color(0xFF1A73E8), size: 36),
+      ),
+    );
+  }
+
+  /// 智能封面图：本地文件用 Image.file，网络图用 CachedNetworkImage
+  Widget _buildThumbnail(String url) {
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      return CachedNetworkImage(
+        imageUrl: url,
+        fit: BoxFit.cover,
+        placeholder: (_, __) => _buildPlaceholderThumb(),
+        errorWidget: (_, __, ___) => _buildPlaceholderThumb(),
+      );
+    } else {
+      return Image.file(
+        File(url),
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => _buildPlaceholderThumb(),
+      );
+    }
+  }
+
+  /// 模式切换对话框
+  void _showModeSwitchDialog(VideoProvider provider) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('切换数据来源'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.wifi_off_rounded, color: Color(0xFF1A73E8)),
+              title: const Text('本地模式（展会离线）'),
+              subtitle: Text(LocalVideoScanner.videoFolder,
+                  style: const TextStyle(fontSize: 11)),
+              selected: provider.isLocalMode,
+              onTap: () {
+                Navigator.pop(ctx);
+                provider.switchToLocal();
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.cloud_outlined, color: Color(0xFF1A73E8)),
+              title: const Text('云端模式（在线）'),
+              subtitle: const Text('从 Supabase 加载视频',
+                  style: TextStyle(fontSize: 11)),
+              selected: !provider.isLocalMode,
+              onTap: () {
+                Navigator.pop(ctx);
+                provider.switchToCloud();
+              },
+            ),
+          ],
+        ),
       ),
     );
   }

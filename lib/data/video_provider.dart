@@ -1,6 +1,15 @@
+import 'dart:io';
 import 'package:flutter/foundation.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/video_item.dart';
+import 'local_video_scanner.dart';
+
+/// 数据来源模式
+enum DataMode {
+  local,   // 本地文件夹（展会离线模式）
+  cloud,   // Supabase 云端
+}
 
 class VideoProvider extends ChangeNotifier {
   final _supabase = Supabase.instance.client;
@@ -9,12 +18,15 @@ class VideoProvider extends ChangeNotifier {
   List<VideoItem> _allItems = [];
   List<VideoCategory> _categories = [];
 
+  // 当前模式
+  DataMode _mode = DataMode.local;
+
   // 加载状态
   bool _isLoading = false;
   String? _errorMessage;
 
   // 筛选状态
-  String _selectedCategoryId = ''; // 空字符串表示"全部"
+  String _selectedCategoryId = '';
   String _searchText = '';
 
   // Getters
@@ -22,19 +34,19 @@ class VideoProvider extends ChangeNotifier {
   String? get errorMessage => _errorMessage;
   List<VideoCategory> get categories => _categories;
   String get selectedCategoryId => _selectedCategoryId;
+  DataMode get mode => _mode;
+  bool get isLocalMode => _mode == DataMode.local;
 
   /// 筛选后的视频列表
   List<VideoItem> get filteredItems {
     var result = _allItems.where((v) => v.isPublished).toList();
 
-    // 按分类筛选
     if (_selectedCategoryId.isNotEmpty) {
       result = result
           .where((v) => v.categoryIds.contains(_selectedCategoryId))
           .toList();
     }
 
-    // 搜索文字过滤
     if (_searchText.isNotEmpty) {
       final q = _searchText.toLowerCase();
       result = result
@@ -46,41 +58,24 @@ class VideoProvider extends ChangeNotifier {
           .toList();
     }
 
-    // 按排序字段排序
     result.sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
     return result;
   }
 
-  /// 初始化：从 Supabase 加载数据
+  /// 初始化：自动检测模式并加载数据
   Future<void> loadData() async {
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();
 
     try {
-      // 并行加载分类和视频
-      final results = await Future.wait([
-        _supabase
-            .from('categories')
-            .select()
-            .order('sort_order', ascending: true),
-        _supabase
-            .from('videos')
-            .select()
-            .eq('is_published', true)
-            .order('sort_order', ascending: true),
-      ]);
-
-      _categories = (results[0] as List<dynamic>)
-          .map((e) => VideoCategory.fromSupabase(e as Map<String, dynamic>))
-          .toList();
-
-      _allItems = (results[1] as List<dynamic>)
-          .map((e) => VideoItem.fromSupabase(e as Map<String, dynamic>))
-          .toList();
-
-      _isLoading = false;
-      notifyListeners();
+      // 优先检测本地视频目录是否存在
+      final hasLocal = await LocalVideoScanner.hasVideoFolder();
+      if (hasLocal) {
+        await _loadLocalVideos();
+      } else {
+        await _loadCloudVideos();
+      }
     } catch (e) {
       _isLoading = false;
       _errorMessage = e.toString();
@@ -88,25 +83,101 @@ class VideoProvider extends ChangeNotifier {
     }
   }
 
-  /// 切换分类
+  /// 加载本地视频
+  Future<void> _loadLocalVideos() async {
+    _mode = DataMode.local;
+
+    // Android 13+ 需要 READ_MEDIA_VIDEO 权限
+    if (Platform.isAndroid) {
+      final status = await Permission.videos.request();
+      if (status.isDenied) {
+        // 降级尝试旧权限
+        await Permission.storage.request();
+      }
+    }
+
+    final videos = await LocalVideoScanner.scanVideos();
+    _allItems = videos;
+
+    // 本地模式下从视频数据中动态生成分类（无需 Supabase）
+    _categories = _buildLocalCategories(videos);
+
+    _isLoading = false;
+    notifyListeners();
+  }
+
+  /// 加载云端视频
+  Future<void> _loadCloudVideos() async {
+    _mode = DataMode.cloud;
+
+    final results = await Future.wait([
+      _supabase
+          .from('categories')
+          .select()
+          .order('sort_order', ascending: true),
+      _supabase
+          .from('videos')
+          .select()
+          .eq('is_published', true)
+          .order('sort_order', ascending: true),
+    ]);
+
+    _categories = (results[0] as List<dynamic>)
+        .map((e) => VideoCategory.fromSupabase(e as Map<String, dynamic>))
+        .toList();
+
+    _allItems = (results[1] as List<dynamic>)
+        .map((e) => VideoItem.fromSupabase(e as Map<String, dynamic>))
+        .toList();
+
+    _isLoading = false;
+    notifyListeners();
+  }
+
+  /// 从本地视频列表动态构建分类（有 categoryIds 则用，否则显示"全部"）
+  List<VideoCategory> _buildLocalCategories(List<VideoItem> videos) {
+    // 固定分类列表（与 Supabase 数据库一致）
+    const fixedCategories = [
+      VideoCategory(
+        id: '',
+        nameZh: '全部',
+        nameEn: 'All',
+        type: 'all',
+        sortOrder: 0,
+      ),
+    ];
+    return fixedCategories;
+  }
+
+  /// 手动切换到本地模式
+  Future<void> switchToLocal() async {
+    _selectedCategoryId = '';
+    _searchText = '';
+    await _loadLocalVideos();
+  }
+
+  /// 手动切换到云端模式
+  Future<void> switchToCloud() async {
+    _selectedCategoryId = '';
+    _searchText = '';
+    await _loadCloudVideos();
+  }
+
   void selectCategory(String categoryId) {
     _selectedCategoryId = categoryId;
     notifyListeners();
   }
 
-  /// 更新搜索文字
   void updateSearch(String text) {
     _searchText = text;
     notifyListeners();
   }
 
-  /// 清除所有筛选
   void clearAllFilters() {
     _selectedCategoryId = '';
     _searchText = '';
     notifyListeners();
   }
 
-  /// 重试加载
   Future<void> retry() => loadData();
 }
