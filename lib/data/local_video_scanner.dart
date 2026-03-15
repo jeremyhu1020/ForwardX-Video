@@ -17,15 +17,55 @@ class LocalVideoScanner {
     '.mp4', '.mov', '.avi', '.mkv', '.m4v', '.3gp', '.wmv'
   ];
 
+  /// 读取完整配置（分类 + 视频映射）
+  static Future<_ConfigData> _loadFullConfig() async {
+    final file = File(configFile);
+    if (!await file.exists()) return _ConfigData(categories: [], videoMap: {});
+    try {
+      final content = await file.readAsString();
+      final json = jsonDecode(content) as Map<String, dynamic>;
+
+      // 读取自定义分类列表
+      final List<VideoCategory> categories = [];
+      if (json.containsKey('categories')) {
+        for (final cat in json['categories'] as List) {
+          final m = cat as Map<String, dynamic>;
+          categories.add(VideoCategory(
+            id: m['id'] as String? ?? '',
+            nameZh: m['name_zh'] as String? ?? '',
+            nameEn: m['name_en'] as String? ?? '',
+            type: m['type'] as String? ?? 'custom',
+            sortOrder: m['sort_order'] as int? ?? 0,
+          ));
+        }
+      }
+
+      // 读取视频配置映射
+      Map<String, dynamic> videoMap = {};
+      if (json.containsKey('videos')) {
+        final videos = json['videos'] as List;
+        videoMap = {
+          for (final v in videos)
+            (v['file'] as String? ?? ''): v as Map<String, dynamic>
+        };
+      } else {
+        // 兼容旧格式：直接是 filename -> config 的 map
+        videoMap = Map<String, dynamic>.from(json);
+      }
+
+      return _ConfigData(categories: categories, videoMap: videoMap);
+    } catch (_) {
+      return _ConfigData(categories: [], videoMap: {});
+    }
+  }
+
   /// 扫描本地视频目录，返回视频列表
   static Future<List<VideoItem>> scanVideos() async {
     final dir = Directory(videoFolder);
     if (!await dir.exists()) return [];
 
-    // 读取配置文件（如果存在）
-    final configMap = await _loadConfig();
+    final config = await _loadFullConfig();
 
-    // 扫描所有视频文件
     final List<VideoItem> items = [];
     int index = 0;
 
@@ -38,51 +78,37 @@ class LocalVideoScanner {
       final nameWithoutExt = p.basenameWithoutExtension(entity.path);
 
       // 从配置文件查找此视频的信息
-      final config = configMap[fileName] ?? configMap[nameWithoutExt] ?? {};
+      final videoConfig = config.videoMap[fileName] ??
+          config.videoMap[nameWithoutExt] ??
+          <String, dynamic>{};
 
       items.add(VideoItem(
         id: 'local_$index',
-        titleZh: config['title_zh'] as String? ?? nameWithoutExt,
-        titleEn: config['title_en'] as String? ?? nameWithoutExt,
-        descriptionZh: config['description_zh'] as String? ?? '',
-        descriptionEn: config['description_en'] as String? ?? '',
-        videoUrl: entity.path,  // 本地文件路径
+        titleZh: videoConfig['title_zh'] as String? ?? nameWithoutExt,
+        titleEn: videoConfig['title_en'] as String? ?? nameWithoutExt,
+        descriptionZh: videoConfig['description_zh'] as String? ?? '',
+        descriptionEn: videoConfig['description_en'] as String? ?? '',
+        videoUrl: entity.path,
         thumbnailUrl: _findThumbnail(entity.path),
-        categoryIds: (config['category_ids'] as List?)
+        categoryIds: (videoConfig['category_ids'] as List?)
                 ?.map((e) => e.toString())
                 .toList() ??
             [],
-        duration: config['duration'] as int?,
-        sortOrder: config['sort_order'] as int? ?? index,
+        duration: videoConfig['duration'] as int?,
+        sortOrder: videoConfig['sort_order'] as int? ?? index,
         isPublished: true,
       ));
       index++;
     }
 
-    // 按 sort_order 排序
     items.sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
     return items;
   }
 
-  /// 加载配置文件
-  static Future<Map<String, dynamic>> _loadConfig() async {
-    final file = File(configFile);
-    if (!await file.exists()) return {};
-    try {
-      final content = await file.readAsString();
-      final json = jsonDecode(content) as Map<String, dynamic>;
-      // 支持两种格式：{"videos": [...]} 或直接 {"filename": {...}}
-      if (json.containsKey('videos')) {
-        final videos = json['videos'] as List;
-        return {
-          for (final v in videos)
-            (v['file'] as String? ?? ''): v as Map<String, dynamic>
-        };
-      }
-      return json;
-    } catch (_) {
-      return {};
-    }
+  /// 读取分类列表（供 VideoProvider 使用）
+  static Future<List<VideoCategory>> loadCategories() async {
+    final config = await _loadFullConfig();
+    return config.categories;
   }
 
   /// 查找同名缩略图（.jpg/.png）
@@ -100,8 +126,42 @@ class LocalVideoScanner {
     return Directory(videoFolder).exists();
   }
 
+  /// 读取原始 config.json 文本内容
+  static Future<String?> readConfigText() async {
+    final file = File(configFile);
+    if (!await file.exists()) return null;
+    return file.readAsString();
+  }
+
+  /// 保存 config.json 文本内容
+  static Future<bool> saveConfigText(String content) async {
+    try {
+      // 先验证 JSON 合法性
+      jsonDecode(content);
+      final file = File(configFile);
+      await file.writeAsString(content);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   /// 生成示例配置文件内容（供用户参考）
   static String get sampleConfig => const JsonEncoder.withIndent('  ').convert({
+    'categories': [
+      {
+        'id': 'cat_product',
+        'name_zh': '产品',
+        'name_en': 'Products',
+        'sort_order': 1,
+      },
+      {
+        'id': 'cat_scene',
+        'name_zh': '场景',
+        'name_en': 'Scenes',
+        'sort_order': 2,
+      },
+    ],
     'videos': [
       {
         'file': 'robot_demo.mp4',
@@ -109,20 +169,17 @@ class LocalVideoScanner {
         'title_en': 'AMR Robot Demo',
         'description_zh': '展示AMR移动机器人在仓储场景中的自动导航和搬运能力',
         'description_en': 'AMR robot autonomous navigation in warehouse',
-        'category_ids': [],
+        'category_ids': ['cat_product'],
         'duration': 120,
         'sort_order': 1,
       },
-      {
-        'file': 'forklift_demo.mp4',
-        'title_zh': '叉车机器人演示',
-        'title_en': 'Forklift Robot Demo',
-        'description_zh': '叉车机器人自动装卸货物演示',
-        'description_en': 'Forklift robot automatic loading demo',
-        'category_ids': [],
-        'duration': 90,
-        'sort_order': 2,
-      }
     ]
   });
+}
+
+/// 内部数据类，用于传递配置解析结果
+class _ConfigData {
+  final List<VideoCategory> categories;
+  final Map<String, dynamic> videoMap;
+  _ConfigData({required this.categories, required this.videoMap});
 }

@@ -1,11 +1,32 @@
 {
+  "categories": [
+    {
+      "id": "cat_product",
+      "name_zh": "产品",
+      "name_en": "Products",
+      "sort_order": 1
+    },
+    {
+      "id": "cat_scene",
+      "name_zh": "场景",
+      "name_en": "Scenes",
+      "sort_order": 2
+    },
+    {
+      "id": "cat_case",
+      "name_zh": "案例",
+      "name_en": "Cases",
+      "sort_order": 3
+    }
+  ],
   "videos": [
     {
-      "file": "robot_demo.mp4",
+      "file": "amr_robot.mp4",
       "title_zh": "AMR机器人演示",
       "title_en": "AMR Robot Demo",
       "description_zh": "展示AMR移动机器人在仓储场景中的自动导航和搬运能力",
       "description_en": "AMR robot autonomous navigation in warehouse",
+      "category_ids": ["cat_product"],
       "duration": 120,
       "sort_order": 1
     },
@@ -15,17 +36,39 @@
       "title_en": "Forklift Robot Demo",
       "description_zh": "叉车机器人自动装卸货物演示",
       "description_en": "Forklift robot automatic loading demo",
+      "category_ids": ["cat_product"],
       "duration": 90,
       "sort_order": 2
     },
     {
-      "file": "composite_robot.mp4",
-      "title_zh": "复合机器人演示",
-      "title_en": "Composite Robot Demo",
-      "description_zh": "复合机器人搬运+操作一体化演示",
-      "description_en": "Composite robot with manipulation demo",
-      "duration": 150,
+      "file": "warehouse_scene.mp4",
+      "title_zh": "智能仓储场景",
+      "title_en": "Smart Warehouse Scene",
+      "description_zh": "机器人在智能仓储环境中协同作业演示",
+      "description_en": "Robots collaborating in smart warehouse",
+      "category_ids": ["cat_scene"],
+      "duration": 180,
       "sort_order": 3
+    },
+    {
+      "file": "factory_scene.mp4",
+      "title_zh": "智能制造场景",
+      "title_en": "Smart Factory Scene",
+      "description_zh": "工厂自动化产线机器人协作演示",
+      "description_en": "Factory automation robot collaboration",
+      "category_ids": ["cat_scene"],
+      "duration": 150,
+      "sort_order": 4
+    },
+    {
+      "file": "customer_case.mp4",
+      "title_zh": "客户成功案例",
+      "title_en": "Customer Success Case",
+      "description_zh": "某大型电商仓库实际落地案例展示",
+      "description_en": "Large e-commerce warehouse deployment case",
+      "category_ids": ["cat_case"],
+      "duration": 200,
+      "sort_order": 5
     }
   ]
 }

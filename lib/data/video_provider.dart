@@ -99,8 +99,9 @@ class VideoProvider extends ChangeNotifier {
     final videos = await LocalVideoScanner.scanVideos();
     _allItems = videos;
 
-    // 本地模式下从视频数据中动态生成分类（无需 Supabase）
-    _categories = _buildLocalCategories(videos);
+    // 从 config.json 读取自定义分类模块
+    final configCategories = await LocalVideoScanner.loadCategories();
+    _categories = _buildLocalCategories(videos, configCategories);
 
     _isLoading = false;
     notifyListeners();
@@ -134,19 +135,42 @@ class VideoProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// 从本地视频列表动态构建分类（有 categoryIds 则用，否则显示"全部"）
-  List<VideoCategory> _buildLocalCategories(List<VideoItem> videos) {
-    // 固定分类列表（与 Supabase 数据库一致）
-    const fixedCategories = [
-      VideoCategory(
-        id: '',
-        nameZh: '全部',
-        nameEn: 'All',
-        type: 'all',
-        sortOrder: 0,
-      ),
-    ];
-    return fixedCategories;
+  /// 从本地视频列表和配置分类构建分类标签
+  /// 优先使用 config.json 中定义的分类；如果没有则自动从视频 categoryIds 推断
+  List<VideoCategory> _buildLocalCategories(
+      List<VideoItem> videos, List<VideoCategory> configCategories) {
+    final allTab = const VideoCategory(
+      id: '',
+      nameZh: '全部',
+      nameEn: 'All',
+      type: 'all',
+      sortOrder: 0,
+    );
+
+    if (configCategories.isNotEmpty) {
+      // config.json 有定义分类，直接用
+      return [allTab, ...configCategories];
+    }
+
+    // 没有配置分类，自动从视频 categoryIds 收集（去重）
+    final seen = <String>{};
+    final List<VideoCategory> inferred = [];
+    int order = 1;
+    for (final video in videos) {
+      for (final cid in video.categoryIds) {
+        if (!seen.contains(cid)) {
+          seen.add(cid);
+          inferred.add(VideoCategory(
+            id: cid,
+            nameZh: cid,
+            nameEn: cid,
+            type: 'custom',
+            sortOrder: order++,
+          ));
+        }
+      }
+    }
+    return [allTab, ...inferred];
   }
 
   /// 手动切换到本地模式

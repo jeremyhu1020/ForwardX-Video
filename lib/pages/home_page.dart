@@ -8,6 +8,7 @@ import '../data/local_video_scanner.dart';
 import '../l10n/app_localizations.dart';
 import '../models/video_item.dart';
 import 'video_player_page.dart';
+import 'config_editor_page.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -122,6 +123,20 @@ class _HomePageState extends State<HomePage> {
             icon: const Icon(Icons.refresh_rounded, color: Colors.white, size: 22),
             onPressed: () => context.read<VideoProvider>().loadData(),
             tooltip: '刷新',
+          ),
+          // 管理入口（仅本地模式显示）
+          Consumer<VideoProvider>(
+            builder: (_, provider, __) => provider.isLocalMode
+                ? IconButton(
+                    icon: const Icon(Icons.tune_rounded,
+                        color: Colors.white, size: 22),
+                    tooltip: '内容管理',
+                    onPressed: () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                          builder: (_) => const ConfigEditorPage()),
+                    ),
+                  )
+                : const SizedBox.shrink(),
           ),
         ],
       ),
