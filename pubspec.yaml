@@ -16,7 +16,7 @@ dependencies:
 
   # 视频播放器
   video_player: ^2.8.1
-  chewie: ^1.7.4
+  chewie: 1.7.4
 
   # 状态管理
   provider: ^6.1.1
