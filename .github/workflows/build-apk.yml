@@ -1,0 +1,91 @@
+name: Build Android APK
+
+# 触发条件：推送到 main 分支，或手动触发
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:   # 支持在 GitHub 网页上手动点击构建
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. 检出代码
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 2. 安装 Java 17
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      # 3. 安装 Flutter
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.19.0'
+          channel: 'stable'
+          cache: true
+
+      # 4. 安装依赖
+      - name: Install dependencies
+        run: flutter pub get
+
+      # 5. 创建空白占位资源（assets 目录必须存在且有文件）
+      - name: Create placeholder assets
+        run: |
+          mkdir -p assets/videos assets/thumbnails
+          touch assets/videos/.gitkeep
+          touch assets/thumbnails/.gitkeep
+
+      # 6. 构建 Debug APK（无需签名，可直接安装测试）
+      - name: Build debug APK
+        run: flutter build apk --debug
+
+      # 7. 同时构建 Release APK（使用 debug 签名，方便测试）
+      - name: Build release APK (debug-signed)
+        run: flutter build apk --release --no-shrink
+
+      # 8. 上传 APK 到 Artifacts（可在 Actions 页面下载）
+      - name: Upload Debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: ForwardX-Robotics-Videos-debug
+          path: build/app/outputs/flutter-apk/app-debug.apk
+          retention-days: 30
+
+      - name: Upload Release APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: ForwardX-Robotics-Videos-release
+          path: build/app/outputs/flutter-apk/app-release.apk
+          retention-days: 30
+
+      # 9. 如果是 push 事件，自动创建 GitHub Release 并附上 APK
+      - name: Create GitHub Release
+        if: github.event_name == 'push'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.run_number }}
+          name: "Build #${{ github.run_number }}"
+          body: |
+            ## ForwardX Robotics Videos APK
+
+            自动构建版本，提交：`${{ github.sha }}`
+
+            ### 安装方法
+            1. 下载下方的 `app-release.apk`
+            2. 在 Android 手机上允许"安装未知来源应用"
+            3. 打开 APK 文件安装
+
+            > ⚠️ 此版本为测试签名，仅供内部测试使用
+          files: |
+            build/app/outputs/flutter-apk/app-debug.apk
+            build/app/outputs/flutter-apk/app-release.apk
+          draft: false
+          prerelease: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

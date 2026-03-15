@@ -1,0 +1,255 @@
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:video_player/video_player.dart';
+import 'package:chewie/chewie.dart';
+import '../models/video_item.dart';
+import '../l10n/app_localizations.dart';
+
+class VideoPlayerPage extends StatefulWidget {
+  final VideoItem video;
+
+  const VideoPlayerPage({super.key, required this.video});
+
+  @override
+  State<VideoPlayerPage> createState() => _VideoPlayerPageState();
+}
+
+class _VideoPlayerPageState extends State<VideoPlayerPage> {
+  VideoPlayerController? _videoController;
+  ChewieController? _chewieController;
+  bool _isLoading = true;
+  String? _errorMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    _initPlayer();
+  }
+
+  Future<void> _initPlayer() async {
+    try {
+      final path = widget.video.videoPath;
+      VideoPlayerController controller;
+
+      if (path.startsWith('http://') || path.startsWith('https://')) {
+        controller = VideoPlayerController.networkUrl(Uri.parse(path));
+      } else {
+        controller = VideoPlayerController.asset(path);
+      }
+
+      _videoController = controller;
+      await controller.initialize();
+
+      _chewieController = ChewieController(
+        videoPlayerController: controller,
+        autoPlay: true,
+        looping: false,
+        allowFullScreen: true,
+        allowMuting: true,
+        showControls: true,
+        placeholder: Container(color: Colors.black),
+        materialProgressColors: ChewieProgressColors(
+          playedColor: Theme.of(context).colorScheme.primary,
+          handleColor: Theme.of(context).colorScheme.primary,
+          bufferedColor: Colors.white30,
+          backgroundColor: Colors.white12,
+        ),
+      );
+
+      if (mounted) setState(() => _isLoading = false);
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _errorMessage = e.toString();
+        });
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _chewieController?.dispose();
+    _videoController?.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: AnnotatedRegion<SystemUiOverlayStyle>(
+        value: SystemUiOverlayStyle.light,
+        child: SafeArea(
+          child: Column(
+            children: [
+              _buildTopBar(),
+              _buildVideoArea(),
+              Expanded(child: _buildInfoArea()),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTopBar() {
+    return Container(
+      color: Colors.black,
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      child: Row(
+        children: [
+          IconButton(
+            icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white),
+            onPressed: () => Navigator.of(context).pop(),
+          ),
+          Expanded(
+            child: Text(
+              widget.video.title,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+              ),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildVideoArea() {
+    final l10n = AppLocalizations.of(context);
+    return Container(
+      color: Colors.black,
+      child: AspectRatio(
+        aspectRatio: 16 / 9,
+        child: _isLoading
+            ? const Center(
+                child: CircularProgressIndicator(color: Colors.white))
+            : _errorMessage != null
+                ? _buildErrorView(l10n)
+                : Chewie(controller: _chewieController!),
+      ),
+    );
+  }
+
+  Widget _buildErrorView(AppLocalizations l10n) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(Icons.error_outline, color: Colors.white54, size: 48),
+          const SizedBox(height: 12),
+          Text(
+            l10n.loadFailed(_errorMessage ?? ''),
+            style: const TextStyle(color: Colors.white54, fontSize: 13),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 16),
+          TextButton(
+            onPressed: () {
+              setState(() {
+                _isLoading = true;
+                _errorMessage = null;
+              });
+              _initPlayer();
+            },
+            child: Text(l10n.retry,
+                style: const TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInfoArea() {
+    final l10n = AppLocalizations.of(context);
+    final video = widget.video;
+    return Container(
+      color: const Color(0xFFF8F9FA),
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              video.title,
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF1A1A1A),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                _buildInfoTag(
+                    l10n.tagProduct, video.product, const Color(0xFF1976D2)),
+                _buildInfoTag(
+                    l10n.tagScene, video.scene, const Color(0xFF388E3C)),
+                _buildInfoTag(
+                    l10n.tagCase, video.caseTag, const Color(0xFF7B1FA2)),
+              ],
+            ),
+            const SizedBox(height: 16),
+            const Divider(height: 1),
+            const SizedBox(height: 16),
+            Text(
+              l10n.videoIntro,
+              style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF333333),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              video.description,
+              style: const TextStyle(
+                fontSize: 14,
+                color: Color(0xFF666666),
+                height: 1.7,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInfoTag(String label, String value, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: color.withOpacity(0.3)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            '$label：',
+            style: TextStyle(
+              fontSize: 12,
+              color: color.withOpacity(0.7),
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 12,
+              color: color,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}

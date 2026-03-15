@@ -1,0 +1,44 @@
+name: video_showcase
+description: 产品视频展示应用 - 支持按产品/场景/案例筛选视频
+
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+
+  # 视频播放器
+  video_player: ^2.8.1
+  chewie: ^1.7.4
+
+  # 状态管理
+  provider: ^6.1.1
+
+  # 图标
+  cupertino_icons: ^1.0.6
+
+  # 本地存储（记录播放进度等）
+  shared_preferences: ^2.2.2
+
+  # 国际化辅助
+  intl: ^0.19.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/videos/
+    - assets/thumbnails/
+    - assets/data/

@@ -1,0 +1,3 @@
+# 此目录用于存放视频文件（.mp4）
+# 将你的视频文件放在这里，文件名需与 lib/data/mock_data.dart 中的 videoPath 一致
+# 示例：camera_home_security.mp4
