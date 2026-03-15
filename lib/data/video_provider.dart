@@ -1,105 +1,112 @@
 import 'package:flutter/foundation.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/video_item.dart';
-import '../models/filter_state.dart';
-import '../data/mock_data.dart';
 
 class VideoProvider extends ChangeNotifier {
-  // 全部数据
-  final List<VideoItem> _allItems = MockVideoData.items;
+  final _supabase = Supabase.instance.client;
+
+  // 数据
+  List<VideoItem> _allItems = [];
+  List<VideoCategory> _categories = [];
+
+  // 加载状态
+  bool _isLoading = false;
+  String? _errorMessage;
 
   // 筛选状态
-  FilterState _filter = const FilterState();
+  String _selectedCategoryId = ''; // 空字符串表示"全部"
+  String _searchText = '';
 
-  FilterState get filter => _filter;
+  // Getters
+  bool get isLoading => _isLoading;
+  String? get errorMessage => _errorMessage;
+  List<VideoCategory> get categories => _categories;
+  String get selectedCategoryId => _selectedCategoryId;
 
-  // 筛选后的列表
+  /// 筛选后的视频列表
   List<VideoItem> get filteredItems {
-    var result = _allItems.toList();
+    var result = _allItems.where((v) => v.isPublished).toList();
 
-    // 按产品筛选
-    if (_filter.selectedProducts.isNotEmpty) {
+    // 按分类筛选
+    if (_selectedCategoryId.isNotEmpty) {
       result = result
-          .where((e) => _filter.selectedProducts.contains(e.product))
-          .toList();
-    }
-
-    // 按场景筛选
-    if (_filter.selectedScenes.isNotEmpty) {
-      result = result
-          .where((e) => _filter.selectedScenes.contains(e.scene))
-          .toList();
-    }
-
-    // 按案例标签筛选
-    if (_filter.selectedCases.isNotEmpty) {
-      result = result
-          .where((e) => _filter.selectedCases.contains(e.caseTag))
+          .where((v) => v.categoryIds.contains(_selectedCategoryId))
           .toList();
     }
 
     // 搜索文字过滤
-    if (_filter.searchText.isNotEmpty) {
-      final q = _filter.searchText.toLowerCase();
+    if (_searchText.isNotEmpty) {
+      final q = _searchText.toLowerCase();
       result = result
-          .where((e) =>
-              e.title.toLowerCase().contains(q) ||
-              e.description.toLowerCase().contains(q) ||
-              e.product.toLowerCase().contains(q) ||
-              e.scene.toLowerCase().contains(q) ||
-              e.caseTag.toLowerCase().contains(q))
+          .where((v) =>
+              v.titleZh.toLowerCase().contains(q) ||
+              v.titleEn.toLowerCase().contains(q) ||
+              v.descriptionZh.toLowerCase().contains(q) ||
+              v.descriptionEn.toLowerCase().contains(q))
           .toList();
     }
 
+    // 按排序字段排序
+    result.sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
     return result;
   }
 
-  // 所有可用标签
-  List<String> get allProducts => MockVideoData.allProducts;
-  List<String> get allScenes => MockVideoData.allScenes;
-  List<String> get allCaseTags => MockVideoData.allCaseTags;
+  /// 初始化：从 Supabase 加载数据
+  Future<void> loadData() async {
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
 
-  // ── 筛选操作 ──────────────────────────────────
+    try {
+      // 并行加载分类和视频
+      final results = await Future.wait([
+        _supabase
+            .from('categories')
+            .select()
+            .order('sort_order', ascending: true),
+        _supabase
+            .from('videos')
+            .select()
+            .eq('is_published', true)
+            .order('sort_order', ascending: true),
+      ]);
 
-  void toggleProduct(String product) {
-    final set = Set<String>.from(_filter.selectedProducts);
-    if (set.contains(product)) {
-      set.remove(product);
-    } else {
-      set.add(product);
+      _categories = (results[0] as List<dynamic>)
+          .map((e) => VideoCategory.fromSupabase(e as Map<String, dynamic>))
+          .toList();
+
+      _allItems = (results[1] as List<dynamic>)
+          .map((e) => VideoItem.fromSupabase(e as Map<String, dynamic>))
+          .toList();
+
+      _isLoading = false;
+      notifyListeners();
+    } catch (e) {
+      _isLoading = false;
+      _errorMessage = e.toString();
+      notifyListeners();
     }
-    _filter = _filter.copyWith(selectedProducts: set);
+  }
+
+  /// 切换分类
+  void selectCategory(String categoryId) {
+    _selectedCategoryId = categoryId;
     notifyListeners();
   }
 
-  void toggleScene(String scene) {
-    final set = Set<String>.from(_filter.selectedScenes);
-    if (set.contains(scene)) {
-      set.remove(scene);
-    } else {
-      set.add(scene);
-    }
-    _filter = _filter.copyWith(selectedScenes: set);
-    notifyListeners();
-  }
-
-  void toggleCase(String caseTag) {
-    final set = Set<String>.from(_filter.selectedCases);
-    if (set.contains(caseTag)) {
-      set.remove(caseTag);
-    } else {
-      set.add(caseTag);
-    }
-    _filter = _filter.copyWith(selectedCases: set);
-    notifyListeners();
-  }
-
+  /// 更新搜索文字
   void updateSearch(String text) {
-    _filter = _filter.copyWith(searchText: text);
+    _searchText = text;
     notifyListeners();
   }
 
+  /// 清除所有筛选
   void clearAllFilters() {
-    _filter = const FilterState();
+    _selectedCategoryId = '';
+    _searchText = '';
     notifyListeners();
   }
+
+  /// 重试加载
+  Future<void> retry() => loadData();
 }

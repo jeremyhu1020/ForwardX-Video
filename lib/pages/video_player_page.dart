@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
 import 'package:video_player/video_player.dart';
 import 'package:chewie/chewie.dart';
 import '../models/video_item.dart';
+import '../data/locale_provider.dart';
 import '../l10n/app_localizations.dart';
 
 class VideoPlayerPage extends StatefulWidget {
@@ -28,13 +30,13 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
 
   Future<void> _initPlayer() async {
     try {
-      final path = widget.video.videoPath;
+      final url = widget.video.videoUrl;
       VideoPlayerController controller;
 
-      if (path.startsWith('http://') || path.startsWith('https://')) {
-        controller = VideoPlayerController.networkUrl(Uri.parse(path));
+      if (url.startsWith('http://') || url.startsWith('https://')) {
+        controller = VideoPlayerController.networkUrl(Uri.parse(url));
       } else {
-        controller = VideoPlayerController.asset(path);
+        controller = VideoPlayerController.asset(url);
       }
 
       _videoController = controller;
@@ -49,8 +51,8 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
         showControls: true,
         placeholder: Container(color: Colors.black),
         materialProgressColors: ChewieProgressColors(
-          playedColor: Theme.of(context).colorScheme.primary,
-          handleColor: Theme.of(context).colorScheme.primary,
+          playedColor: const Color(0xFF1A73E8),
+          handleColor: const Color(0xFF1A73E8),
           bufferedColor: Colors.white30,
           backgroundColor: Colors.white12,
         ),
@@ -76,6 +78,10 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
 
   @override
   Widget build(BuildContext context) {
+    final isZh =
+        context.watch<LocaleProvider>().locale.languageCode == 'zh';
+    final video = widget.video;
+
     return Scaffold(
       backgroundColor: Colors.black,
       body: AnnotatedRegion<SystemUiOverlayStyle>(
@@ -83,9 +89,9 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
         child: SafeArea(
           child: Column(
             children: [
-              _buildTopBar(),
+              _buildTopBar(video.getTitle(isZh)),
               _buildVideoArea(),
-              Expanded(child: _buildInfoArea()),
+              Expanded(child: _buildInfoArea(video, isZh)),
             ],
           ),
         ),
@@ -93,7 +99,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
     );
   }
 
-  Widget _buildTopBar() {
+  Widget _buildTopBar(String title) {
     return Container(
       color: Colors.black,
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -105,7 +111,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
           ),
           Expanded(
             child: Text(
-              widget.video.title,
+              title,
               style: const TextStyle(
                 color: Colors.white,
                 fontSize: 15,
@@ -142,10 +148,13 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
         children: [
           const Icon(Icons.error_outline, color: Colors.white54, size: 48),
           const SizedBox(height: 12),
-          Text(
-            l10n.loadFailed(_errorMessage ?? ''),
-            style: const TextStyle(color: Colors.white54, fontSize: 13),
-            textAlign: TextAlign.center,
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: Text(
+              l10n.loadFailed(_errorMessage ?? ''),
+              style: const TextStyle(color: Colors.white54, fontSize: 13),
+              textAlign: TextAlign.center,
+            ),
           ),
           const SizedBox(height: 16),
           TextButton(
@@ -164,9 +173,8 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
     );
   }
 
-  Widget _buildInfoArea() {
+  Widget _buildInfoArea(VideoItem video, bool isZh) {
     final l10n = AppLocalizations.of(context);
-    final video = widget.video;
     return Container(
       color: const Color(0xFFF8F9FA),
       child: SingleChildScrollView(
@@ -175,26 +183,28 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              video.title,
+              video.getTitle(isZh),
               style: const TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
                 color: Color(0xFF1A1A1A),
               ),
             ),
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                _buildInfoTag(
-                    l10n.tagProduct, video.product, const Color(0xFF1976D2)),
-                _buildInfoTag(
-                    l10n.tagScene, video.scene, const Color(0xFF388E3C)),
-                _buildInfoTag(
-                    l10n.tagCase, video.caseTag, const Color(0xFF7B1FA2)),
-              ],
-            ),
+            if (video.duration != null) ...[
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  const Icon(Icons.access_time,
+                      size: 14, color: Colors.black45),
+                  const SizedBox(width: 4),
+                  Text(
+                    _formatDuration(video.duration!),
+                    style: const TextStyle(
+                        fontSize: 13, color: Colors.black45),
+                  ),
+                ],
+              ),
+            ],
             const SizedBox(height: 16),
             const Divider(height: 1),
             const SizedBox(height: 16),
@@ -208,7 +218,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
             ),
             const SizedBox(height: 8),
             Text(
-              video.description,
+              video.getDescription(isZh),
               style: const TextStyle(
                 fontSize: 14,
                 color: Color(0xFF666666),
@@ -221,35 +231,9 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
     );
   }
 
-  Widget _buildInfoTag(String label, String value, Color color) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: color.withOpacity(0.3)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            '$label：',
-            style: TextStyle(
-              fontSize: 12,
-              color: color.withOpacity(0.7),
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 12,
-              color: color,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
-      ),
-    );
+  String _formatDuration(int seconds) {
+    final m = seconds ~/ 60;
+    final s = seconds % 60;
+    return '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
   }
 }

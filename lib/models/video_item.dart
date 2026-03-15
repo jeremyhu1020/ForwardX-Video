@@ -1,62 +1,91 @@
-/// 视频条目数据模型
+/// 视频条目数据模型（适配 Supabase 数据结构）
 class VideoItem {
   final String id;
-  final String title;
-  final String description;
-  final String videoPath;      // assets 路径或网络 URL
-  final String thumbnailPath;  // 缩略图路径
-  final String product;        // 所属产品
-  final String scene;          // 应用场景
-  final String caseTag;        // 案例标签
-  final Duration? duration;    // 视频时长（可选）
-  final DateTime? publishDate; // 发布日期（可选）
+  final String titleZh;
+  final String titleEn;
+  final String descriptionZh;
+  final String descriptionEn;
+  final String videoUrl;        // Supabase Storage 或外部视频 URL
+  final String? thumbnailUrl;   // 封面图 URL
+  final List<String> categoryIds; // 关联分类 ID
+  final int? duration;          // 视频时长（秒）
+  final int sortOrder;
+  final bool isPublished;
+  final DateTime? createdAt;
 
   const VideoItem({
     required this.id,
-    required this.title,
-    required this.description,
-    required this.videoPath,
-    required this.thumbnailPath,
-    required this.product,
-    required this.scene,
-    required this.caseTag,
+    required this.titleZh,
+    required this.titleEn,
+    required this.descriptionZh,
+    required this.descriptionEn,
+    required this.videoUrl,
+    this.thumbnailUrl,
+    this.categoryIds = const [],
     this.duration,
-    this.publishDate,
+    this.sortOrder = 0,
+    this.isPublished = true,
+    this.createdAt,
   });
 
-  /// 从 JSON 构建
-  factory VideoItem.fromJson(Map<String, dynamic> json) {
+  /// 根据当前语言返回标题
+  String getTitle(bool isZh) => isZh ? titleZh : titleEn;
+
+  /// 根据当前语言返回描述
+  String getDescription(bool isZh) => isZh ? descriptionZh : descriptionEn;
+
+  /// 从 Supabase JSON 构建
+  factory VideoItem.fromSupabase(Map<String, dynamic> json) {
     return VideoItem(
       id: json['id'] as String,
-      title: json['title'] as String,
-      description: json['description'] as String,
-      videoPath: json['videoPath'] as String,
-      thumbnailPath: json['thumbnailPath'] as String,
-      product: json['product'] as String,
-      scene: json['scene'] as String,
-      caseTag: json['caseTag'] as String,
-      duration: json['durationSeconds'] != null
-          ? Duration(seconds: json['durationSeconds'] as int)
-          : null,
-      publishDate: json['publishDate'] != null
-          ? DateTime.parse(json['publishDate'] as String)
+      titleZh: json['title_zh'] as String? ?? '',
+      titleEn: json['title_en'] as String? ?? '',
+      descriptionZh: json['description_zh'] as String? ?? '',
+      descriptionEn: json['description_en'] as String? ?? '',
+      videoUrl: json['video_url'] as String? ?? '',
+      thumbnailUrl: json['thumbnail_url'] as String?,
+      categoryIds: (json['category_ids'] as List<dynamic>?)
+              ?.map((e) => e.toString())
+              .toList() ??
+          [],
+      duration: json['duration'] as int?,
+      sortOrder: json['sort_order'] as int? ?? 0,
+      isPublished: json['is_published'] as bool? ?? true,
+      createdAt: json['created_at'] != null
+          ? DateTime.parse(json['created_at'] as String)
           : null,
     );
   }
 
-  Map<String, dynamic> toJson() => {
-        'id': id,
-        'title': title,
-        'description': description,
-        'videoPath': videoPath,
-        'thumbnailPath': thumbnailPath,
-        'product': product,
-        'scene': scene,
-        'caseTag': caseTag,
-        'durationSeconds': duration?.inSeconds,
-        'publishDate': publishDate?.toIso8601String(),
-      };
-
   @override
-  String toString() => 'VideoItem(id: $id, title: $title)';
+  String toString() => 'VideoItem(id: $id, title: $titleZh)';
+}
+
+/// 分类数据模型
+class VideoCategory {
+  final String id;
+  final String nameZh;
+  final String nameEn;
+  final String type; // product / scene / case / all
+  final int sortOrder;
+
+  const VideoCategory({
+    required this.id,
+    required this.nameZh,
+    required this.nameEn,
+    required this.type,
+    this.sortOrder = 0,
+  });
+
+  String getName(bool isZh) => isZh ? nameZh : nameEn;
+
+  factory VideoCategory.fromSupabase(Map<String, dynamic> json) {
+    return VideoCategory(
+      id: json['id'] as String,
+      nameZh: json['name_zh'] as String? ?? '',
+      nameEn: json['name_en'] as String? ?? '',
+      type: json['type'] as String? ?? 'product',
+      sortOrder: json['sort_order'] as int? ?? 0,
+    );
+  }
 }
