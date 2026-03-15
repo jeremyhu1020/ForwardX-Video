@@ -34,12 +34,49 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
-      # 5. 创建空白占位资源（assets 目录必须存在且有文件）
-      - name: Create placeholder assets
+      # 5. 创建必要资源目录和 Android 图标
+      - name: Create placeholder assets and icons
         run: |
           mkdir -p assets/videos assets/thumbnails
-          touch assets/videos/.gitkeep
-          touch assets/thumbnails/.gitkeep
+
+          # 创建各尺寸 Android 图标（使用 Python 生成最小合法 PNG）
+          python3 - <<'EOF'
+import struct, zlib, os
+
+def make_png(size, r, g, b):
+    """生成纯色 PNG"""
+    def chunk(name, data):
+        c = zlib.crc32(name + data) & 0xffffffff
+        return struct.pack('>I', len(data)) + name + data + struct.pack('>I', c)
+    
+    raw = b''
+    for _ in range(size):
+        row = b'\x00' + bytes([r, g, b, 255] * size)
+        raw += row
+    
+    compressed = zlib.compress(raw)
+    png = b'\x89PNG\r\n\x1a\n'
+    png += chunk(b'IHDR', struct.pack('>IIBBBBB', size, size, 8, 2, 0, 0, 0))
+    png += chunk(b'IDAT', compressed)
+    png += chunk(b'IEND', b'')
+    return png
+
+icons = {
+    'mipmap-mdpi': 48,
+    'mipmap-hdpi': 72,
+    'mipmap-xhdpi': 96,
+    'mipmap-xxhdpi': 144,
+    'mipmap-xxxhdpi': 192,
+  }
+
+base = 'android/app/src/main/res'
+for folder, size in icons.items():
+    path = f'{base}/{folder}'
+    os.makedirs(path, exist_ok=True)
+    with open(f'{path}/ic_launcher.png', 'wb') as f:
+        f.write(make_png(size, 26, 115, 232))  # ForwardX 蓝色 #1A73E8
+    print(f'Created {path}/ic_launcher.png ({size}x{size})')
+EOF
 
       # 6. 构建 Debug APK（无需签名，可直接安装测试）
       - name: Build debug APK
