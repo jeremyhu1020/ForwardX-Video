@@ -221,4 +221,19 @@ class VideoProvider extends ChangeNotifier {
   }
 
   Future<void> retry() => loadData();
+
+  /// 从 config.json 删除视频配置，并刷新列表
+  /// [videoUrl] 是本地文件路径，从中提取文件名
+  Future<bool> removeLocalVideo(String videoUrl) async {
+    final fileName = videoUrl.contains('/')
+        ? videoUrl.split('/').last
+        : videoUrl;
+    final ok = await LocalVideoScanner.removeVideoFromConfig(fileName);
+    if (ok) {
+      // 从内存列表里直接移除，无需重新扫描
+      _allItems.removeWhere((v) => v.videoUrl == videoUrl);
+      notifyListeners();
+    }
+    return ok;
+  }
 }

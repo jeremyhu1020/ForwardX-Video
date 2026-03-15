@@ -508,6 +508,7 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget _buildVideoCard(VideoItem video, bool isZh) {
+    final provider = context.read<VideoProvider>();
     return GestureDetector(
       onTap: () {
         Navigator.of(context).push(
@@ -516,6 +517,10 @@ class _HomePageState extends State<HomePage> {
           ),
         );
       },
+      // 长按弹出删除菜单（仅本地模式）
+      onLongPress: provider.isLocalMode
+          ? () => _showDeleteVideoDialog(video, isZh)
+          : null,
       child: Container(
         decoration: BoxDecoration(
           color: Colors.white,
@@ -623,6 +628,44 @@ class _HomePageState extends State<HomePage> {
         errorBuilder: (_, __, ___) => _buildPlaceholderThumb(),
       );
     }
+  }
+
+  /// 长按视频 → 删除确认对话框
+  void _showDeleteVideoDialog(VideoItem video, bool isZh) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('删除视频'),
+        content: Text(
+          '确认从列表中删除「${video.getTitle(isZh)}」？\n\n'
+          '（视频文件不会被删除，仅从显示列表中移除）',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('取消'),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(ctx);
+              final ok = await context
+                  .read<VideoProvider>()
+                  .removeLocalVideo(video.videoUrl);
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(ok ? '已删除「${video.getTitle(isZh)}」' : '删除失败，请重试'),
+                    backgroundColor: ok ? const Color(0xFF2BB80F) : Colors.red,
+                    duration: const Duration(seconds: 2),
+                  ),
+                );
+              }
+            },
+            child: const Text('删除', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
   }
 
   /// 模式切换对话框

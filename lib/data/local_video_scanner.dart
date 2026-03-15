@@ -168,6 +168,37 @@ class LocalVideoScanner {
     }
   }
 
+  /// 从 config.json 中删除指定视频（按文件名匹配），并保存
+  /// 返回 true 表示成功
+  static Future<bool> removeVideoFromConfig(String fileName) async {
+    final file = File(configFile);
+    Map<String, dynamic> json = {};
+
+    if (await file.exists()) {
+      try {
+        final content = await file.readAsString();
+        json = jsonDecode(content) as Map<String, dynamic>;
+      } catch (_) {
+        json = {};
+      }
+    }
+
+    // 确保有 videos 列表
+    final List videos = json['videos'] as List? ?? [];
+    final nameWithoutExt = p.basenameWithoutExtension(fileName);
+
+    // 移除匹配的视频条目
+    videos.removeWhere((v) {
+      final f = (v as Map<String, dynamic>)['file'] as String? ?? '';
+      return f == fileName || f == nameWithoutExt;
+    });
+
+    json['videos'] = videos;
+
+    final newContent = const JsonEncoder.withIndent('  ').convert(json);
+    return saveConfigText(newContent);
+  }
+
   /// 生成示例配置文件内容（支持二级子分类）
   static String get sampleConfig => const JsonEncoder.withIndent('  ').convert({
     'categories': [

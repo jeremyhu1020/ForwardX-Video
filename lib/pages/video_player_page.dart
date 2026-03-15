@@ -35,10 +35,8 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
       VideoPlayerController controller;
 
       if (url.startsWith('http://') || url.startsWith('https://')) {
-        // 网络视频
         controller = VideoPlayerController.networkUrl(Uri.parse(url));
       } else {
-        // 本地文件
         controller = VideoPlayerController.file(File(url));
       }
 
@@ -52,6 +50,8 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
         allowFullScreen: true,
         allowMuting: true,
         showControls: true,
+        // 进入播放页立即全屏
+        fullScreenByDefault: true,
         placeholder: Container(color: Colors.black),
         materialProgressColors: ChewieProgressColors(
           playedColor: const Color(0xFF2BB80F),
@@ -60,6 +60,9 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
           backgroundColor: Colors.white12,
         ),
       );
+
+      // 监听播放状态：播放结束时退出全屏并返回上一页
+      controller.addListener(_onVideoStatusChanged);
 
       if (mounted) setState(() => _isLoading = false);
     } catch (e) {
@@ -72,10 +75,36 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
     }
   }
 
+  /// 播放结束自动退出全屏，并返回上一页
+  void _onVideoStatusChanged() {
+    final ctrl = _videoController;
+    if (ctrl == null) return;
+    final val = ctrl.value;
+    // 播放完毕：position 到达 duration 且不在播放中
+    if (val.duration.inMilliseconds > 0 &&
+        val.position >= val.duration &&
+        !val.isPlaying) {
+      // 退出全屏
+      if (_chewieController?.isFullScreen == true) {
+        _chewieController?.exitFullScreen();
+      }
+      // 稍作延迟再返回，让动画完成
+      Future.delayed(const Duration(milliseconds: 600), () {
+        if (mounted) Navigator.of(context).pop();
+      });
+    }
+  }
+
   @override
   void dispose() {
+    _videoController?.removeListener(_onVideoStatusChanged);
     _chewieController?.dispose();
     _videoController?.dispose();
+    // 退出时恢复竖屏
+    SystemChrome.setPreferredOrientations([
+      DeviceOrientation.portraitUp,
+      DeviceOrientation.portraitDown,
+    ]);
     super.dispose();
   }
 
